@@ -123,7 +123,7 @@ function Logo() {
 function Toggle({ on, set }: { on: boolean; set: (b: boolean) => void }) {
   return (
     <button onClick={() => set(!on)} aria-label="تبديل" className={`flex h-8 w-14 items-center rounded-full p-1 transition ${on ? "bg-accent" : "bg-primary-foreground/20"}`}>
-      <span className={`h-6 w-6 rounded-full bg-primary transition ${on ? "-translate-x-6" : ""}`} />
+      <span className={`h-6 w-6 rounded-full bg-primary transition ${on ? "" : "-translate-x-6"}`} />
     </button>
   );
 }
