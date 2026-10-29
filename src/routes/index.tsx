@@ -345,7 +345,7 @@ function PaymentScreen({ go }: { go: (s: Screen) => void }) {
           <button onClick={() => setMethod("samsung")} className={`rounded-2xl bg-primary py-4 font-bold text-primary-foreground ${method === "samsung" ? "ring-4 ring-accent" : ""}`}>Samsung Wallet</button>
         </div>
         <p className="pt-3 text-sm font-bold text-muted-foreground">قسّم دفعتك</p>
-        {[["tabby", "تابي | Tabby", "قسّم على ٤ دفعات"], ["tamara", "تمارا | Tamara", "قسّم على دفعات"]].map(([id, n, d]) => (
+        {([["tabby", "تابي | Tabby", "قسّم على ٤ دفعات"], ["tamara", "تمارا | Tamara", "قسّم على دفعات"]] as const).map(([id, n, d]) => (
           <div key={id} onClick={() => setMethod(id)} className={`rounded-2xl border-2 bg-card p-4 ${method === id ? "border-accent" : "border-border"}`}>
             <div className="flex justify-between"><span className="font-bold">{n}</span><span className="text-xs text-muted-foreground">{d}</span></div>
             <div className="mt-3 grid grid-cols-2 gap-3">
