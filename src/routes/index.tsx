@@ -50,6 +50,8 @@ const DROP_OPTS: [string, string][] = [
   ["موقع مختلف عن المحفوظ", "مثل العمل"],
 ];
 
+const optionAt = (opts: [string, string][], i: number): [string, string] => opts[i] ?? opts[0] ?? ["", ""];
+
 function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [qty, setQty] = useState<Record<string, number>>({ ثوب: 2, شماغ: 1 });
@@ -266,8 +268,8 @@ function OrderScreen({ go, qty, setQty, extras, setExtras }: {
 
         <h2 className="mb-3 mt-7 font-bold">خيارات الاستلام والتسليم</h2>
         <div className="space-y-3">
-          <OptionRow icon={Truck} label="الاستلام من" opt={PICKUP_OPTS[pick]} onOpen={() => setOptSheet("pick")} />
-          <OptionRow icon={MapPin} label="التسليم إلى" opt={DROP_OPTS[drop]} onOpen={() => setOptSheet("drop")} />
+          <OptionRow icon={Truck} label="الاستلام من" opt={optionAt(PICKUP_OPTS, pick)} onOpen={() => setOptSheet("pick")} />
+          <OptionRow icon={MapPin} label="التسليم إلى" opt={optionAt(DROP_OPTS, drop)} onOpen={() => setOptSheet("drop")} />
         </div>
 
         <div className="mt-5 space-y-3">
