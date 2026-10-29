@@ -20,7 +20,7 @@ export const Route = createFileRoute("/")({
   component: App,
 });
 
-type Screen = "home" | "order" | "payment" | "track" | "map" | "offers" | "account" | "delivery" | "orders";
+type Screen = "home" | "order" | "payment" | "done" | "track" | "map" | "offers" | "account" | "delivery" | "orders";
 type Item = { name: string; price: number; cat: string };
 
 const MAIN: Item[] = [
@@ -57,6 +57,8 @@ function App() {
   const [qty, setQty] = useState<Record<string, number>>({ ثوب: 2, شماغ: 1 });
   const [extras, setExtras] = useState<string[]>([]);
   const [invoice, setInvoice] = useState(false);
+  const [time, setTime] = useState("اليوم مساءً");
+  const [payMethod, setPayMethod] = useState("كاش عند الاستلام");
   const go = (s: Screen) => {
     setScreen(s);
     window.scrollTo(0, 0);
@@ -67,8 +69,9 @@ function App() {
     <div dir="rtl" className="mx-auto min-h-screen max-w-md bg-background font-sans text-foreground">
       <div className={tab ? "pb-24" : ""}>
         {screen === "home" && <HomeScreen go={go} />}
-        {screen === "order" && <OrderScreen go={go} qty={qty} setQty={setQty} extras={extras} setExtras={setExtras} />}
-        {screen === "payment" && <PaymentScreen go={go} />}
+        {screen === "order" && <OrderScreen go={go} qty={qty} setQty={setQty} extras={extras} setExtras={setExtras} time={time} setTime={setTime} />}
+        {screen === "payment" && <PaymentScreen go={go} onPaid={setPayMethod} />}
+        {screen === "done" && <DoneScreen go={go} qty={qty} time={time} payMethod={payMethod} />}
         {screen === "track" && <TrackScreen go={go} />}
         {screen === "map" && <MapScreen go={go} />}
         {screen === "offers" && <OffersScreen />}
@@ -217,11 +220,11 @@ function BottomNav({ screen, go }: { screen: Screen; go: (s: Screen) => void }) 
 }
 
 /* ---------- new order ---------- */
-function OrderScreen({ go, qty, setQty, extras, setExtras }: {
+function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime }: {
   go: (s: Screen) => void; qty: Record<string, number>; setQty: (q: Record<string, number>) => void;
   extras: string[]; setExtras: (e: string[]) => void;
+  time: string; setTime: (t: string) => void;
 }) {
-  const [time, setTime] = useState("اليوم مساءً");
   const [door, setDoor] = useState(true);
   const [privacy, setPrivacy] = useState(true);
   const [pick, setPick] = useState(0);
@@ -396,7 +399,10 @@ function ExtrasSheet({ qty, set, close, confirm }: {
 }
 
 /* ---------- payment ---------- */
-function PaymentScreen({ go }: { go: (s: Screen) => void }) {
+const PAY_LABEL: Record<string, string> = {
+  cash: "كاش عند الاستلام", mada: "بطاقة مدى", apple: "Apple Pay", samsung: "Samsung Wallet", tabby: "تابي", tamara: "تمارا",
+};
+function PaymentScreen({ go, onPaid }: { go: (s: Screen) => void; onPaid: (m: string) => void }) {
   const [method, setMethod] = useState("cash");
   const [plan, setPlan] = useState<Record<string, string>>({ tabby: "مقدماً", tamara: "مع الراتب" });
   const opt = (id: string, Icon: typeof Banknote, t: string, d: string, side?: ReactNode) => (
@@ -429,7 +435,40 @@ function PaymentScreen({ go }: { go: (s: Screen) => void }) {
           </div>
         ))}
       </div>
-      <Footer><GoldBtn onClick={() => go("track")} className="w-full">تأكيد طريقة الدفع</GoldBtn></Footer>
+      <Footer><GoldBtn onClick={() => { onPaid(PAY_LABEL[method] ?? "كاش عند الاستلام"); go("done"); }} className="w-full">تأكيد طريقة الدفع</GoldBtn></Footer>
+    </div>
+  );
+}
+
+/* ---------- order received ---------- */
+function DoneScreen({ go, qty, time, payMethod }: {
+  go: (s: Screen) => void; qty: Record<string, number>; time: string; payMethod: string;
+}) {
+  const pieces = ALL.reduce((s, i) => s + (qty[i.name] || 0), 0);
+  const total = ALL.reduce((s, i) => s + (qty[i.name] || 0) * i.price, 0);
+  const rows = [["القطع", `${pieces} قطعة`], ["الإجمالي", `${total} ر.س`], ["طريقة الدفع", payMethod], ["موعد الاستلام", time]];
+  return (
+    <div className="px-5 pb-10 pt-16 text-center">
+      <div className="mx-auto grid h-28 w-28 place-items-center rounded-full bg-success text-success-foreground shadow-soft ring-8 ring-success/15">
+        <Check className="h-14 w-14" strokeWidth={3} />
+      </div>
+      <h1 className="mt-6 font-display text-4xl font-bold">تم استلام طلبك</h1>
+      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+        استلم مندوبنا ملابسك من بابك وبدأنا الغسيل والكي
+        <br /> رقم طلبك <b className="text-foreground">1042</b>
+      </p>
+      <div className="mt-8 space-y-3 rounded-3xl bg-primary p-5 text-right text-primary-foreground">
+        {rows.map(([k, v]) => (
+          <div key={k} className="flex items-center justify-between text-sm">
+            <span className="opacity-75">{k}</span><span className="font-bold">{v}</span>
+          </div>
+        ))}
+      </div>
+      <GoldBtn onClick={() => go("track")} className="mt-7 w-full">تتبع الطلب</GoldBtn>
+      <button onClick={() => go("home")} className="mt-3 w-full rounded-full border-2 border-accent bg-card py-3.5 font-bold active:scale-[0.98]">
+        العودة للرئيسية
+      </button>
+      <p className="mt-5 text-xs text-muted-foreground">يصلك إشعار فور وصول المندوب إلى بابك.</p>
     </div>
   );
 }
@@ -558,6 +597,14 @@ function OrdersScreen({ go, openInvoice }: { go: (s: Screen) => void; openInvoic
       <button onClick={() => go("track")} className="mt-5 w-full rounded-2xl bg-primary p-5 text-right text-primary-foreground">
         <div className="flex justify-between"><b>طلب 1042</b><span className="text-accent">في الطريق إليك</span></div>
         <p className="mt-1 text-sm opacity-75">٦ قطع · ٢٤ ر.س</p>
+      </button>
+      <button onClick={() => go("track")} className="mt-5 flex w-full items-center gap-3 rounded-2xl border-2 border-accent bg-card p-4 text-right">
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-primary"><Truck className="h-5 w-5 text-accent" /></span>
+        <span className="flex-1">
+          <span className="block font-bold">تتبع الطلب</span>
+          <span className="block text-xs text-muted-foreground">طلب 1042 · في الطريق إليك</span>
+        </span>
+        <ChevronLeft className="h-5 w-5" />
       </button>
       <h2 className="mb-3 mt-6 font-bold">فواتيري السابقة</h2>
       {["1031", "1018", "1002"].map((n) => (
