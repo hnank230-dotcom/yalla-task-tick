@@ -46,13 +46,16 @@ describe("Order received page", () => {
   it("carries the chosen pickup time and the real total into the confirmation", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "اطلب استلام الآن" }));
-    fireEvent.click(screen.getByRole("button", { name: "غداً صباحااً" }));
+    const [morning] = screen.getAllByRole("button", { name: /غداً/ });
+    if (!morning) throw new Error("pickup time chips missing");
+    const label = morning.textContent ?? "";
+    fireEvent.click(morning);
     fireEvent.click(screen.getByRole("button", { name: "تأكيد الطلب" }));
     fireEvent.click(screen.getByRole("button", { name: "تأكيد طريقة الدفع" }));
 
     // default qty: ثوب ×2 (8) + شماغ ×1 (4) = 12 ر.س
     expect(screen.getByText("12 ر.س")).toBeInTheDocument();
-    expect(screen.getByText("غداً صباحاا")).toBeInTheDocument();
+    expect(screen.getByText(label)).toBeInTheDocument();
   });
 
   it("hands over to tracking from the confirmation", () => {
