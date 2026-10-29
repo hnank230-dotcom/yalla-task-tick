@@ -38,6 +38,20 @@ const OTHER: Item[] = [
 ];
 const ALL = [...MAIN, ...OTHER];
 
+const PICKUP_OPTS: [string, string][] = [
+  ["تعليقة الباب", "تعلّق الكيس على باب بيتك"],
+  ["يد بيد", "يستلم المندوب منك مباشرة"],
+  ["السلة الرئيسية", "في السلة عند المدخل"],
+  ["موقع مختلف عن المحفوظ", "مثل العمل"],
+];
+const DROP_OPTS: [string, string][] = [
+  ["تعليقة الباب", "نعلّق الكيس على باب بيتك"],
+  ["يد بيد", "تستلم الطلب مباشرة"],
+  ["موقع مختلف عن المحفوظ", "مثل العمل"],
+];
+
+const optionAt = (opts: [string, string][], i: number): [string, string] => opts[i] ?? opts[0] ?? ["", ""];
+
 function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [qty, setQty] = useState<Record<string, number>>({ ثوب: 2, شماغ: 1 });
@@ -210,6 +224,9 @@ function OrderScreen({ go, qty, setQty, extras, setExtras }: {
   const [time, setTime] = useState("اليوم مساءً");
   const [door, setDoor] = useState(true);
   const [privacy, setPrivacy] = useState(true);
+  const [pick, setPick] = useState(0);
+  const [drop, setDrop] = useState(0);
+  const [optSheet, setOptSheet] = useState<null | "pick" | "drop">(null);
   const [sheet, setSheet] = useState(false);
   const list = [...MAIN, ...OTHER.filter((o) => extras.includes(o.name))];
   const total = ALL.reduce((s, i) => s + (qty[i.name] || 0) * i.price, 0);
@@ -249,6 +266,12 @@ function OrderScreen({ go, qty, setQty, extras, setExtras }: {
           ))}
         </div>
 
+        <h2 className="mb-3 mt-7 font-bold">خيارات الاستلام والتسليم</h2>
+        <div className="space-y-3">
+          <OptionRow icon={Truck} label="الاستلام من" opt={optionAt(PICKUP_OPTS, pick)} onOpen={() => setOptSheet("pick")} />
+          <OptionRow icon={MapPin} label="التسليم إلى" opt={optionAt(DROP_OPTS, drop)} onOpen={() => setOptSheet("drop")} />
+        </div>
+
         <div className="mt-5 space-y-3">
           <div className="flex items-center gap-3 rounded-2xl bg-primary p-5 text-primary-foreground">
             <div className="flex-1">
@@ -278,6 +301,56 @@ function OrderScreen({ go, qty, setQty, extras, setExtras }: {
       </Footer>
 
       {sheet && <ExtrasSheet qty={qty} set={set} close={() => setSheet(false)} confirm={(names) => { setExtras([...new Set([...extras, ...names])]); setSheet(false); }} />}
+      {optSheet && (
+        <OptionSheet
+          title={optSheet === "pick" ? "الاستلام: نستلم ملابسك من" : "التسليم: نوصل ملابسك إلى"}
+          opts={optSheet === "pick" ? PICKUP_OPTS : DROP_OPTS}
+          value={optSheet === "pick" ? pick : drop}
+          onPick={(i) => (optSheet === "pick" ? setPick(i) : setDrop(i))}
+          close={() => setOptSheet(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function OptionRow({ icon: Icon, label, opt, onOpen }: {
+  icon: typeof Truck; label: string; opt: [string, string]; onOpen: () => void;
+}) {
+  return (
+    <button onClick={onOpen} className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-right">
+      <span className="grid h-11 w-11 place-items-center rounded-full bg-primary"><Icon className="h-5 w-5 text-accent" /></span>
+      <span className="flex-1">
+        <span className="block text-xs text-muted-foreground">{label}</span>
+        <span className="block font-bold">{opt[0]}</span>
+        <span className="block text-xs text-muted-foreground">{opt[1]}</span>
+      </span>
+      <span className="flex items-center gap-1 text-xs font-bold text-accent">تغيير<ChevronLeft className="h-4 w-4" /></span>
+    </button>
+  );
+}
+
+function OptionSheet({ title, opts, value, onPick, close }: {
+  title: string; opts: [string, string][]; value: number; onPick: (i: number) => void; close: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 mx-auto flex max-w-md flex-col justify-end bg-primary/50" onClick={close}>
+      <div className="rounded-t-3xl bg-background p-5 pb-6" onClick={(e) => e.stopPropagation()}>
+        <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-border" />
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-2xl font-bold">{title}</h2>
+          <button onClick={close} className="grid h-11 w-11 place-items-center rounded-full border border-border bg-card" aria-label="إغلاق"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="mt-4 space-y-3">
+          {opts.map(([t, d], i) => (
+            <button key={t} onClick={() => onPick(i)} className={`flex w-full items-center gap-3 rounded-2xl border-2 bg-card p-4 text-right ${value === i ? "border-accent" : "border-border"}`}>
+              <span className="flex-1"><span className="block font-bold">{t}</span><span className="text-xs text-muted-foreground">{d}</span></span>
+              <span className={`grid h-7 w-7 place-items-center rounded-full ${value === i ? "bg-accent" : "border-2 border-border"}`}>{value === i && <Check className="h-4 w-4" />}</span>
+            </button>
+          ))}
+        </div>
+        <GoldBtn onClick={close} className="mt-5 w-full">تم</GoldBtn>
+      </div>
     </div>
   );
 }
@@ -563,9 +636,9 @@ function DeliveryScreen({ go }: { go: (s: Screen) => void }) {
       <Header title="خيارات التسليم" back={() => go("account")} />
       <div className="px-5">
         <h2 className="mb-3 font-bold">الاستلام: نستلم ملابسك من</h2>
-        {group([["تعليقة الباب", "تعلّق الكيس على باب بيتك"], ["يد بيد", "يستلم المندوب منك مباشرة"], ["السلة الرئيسية", "في السلة عند المدخل"], ["موقع مختلف عن المحفوظ", "مثل العمل"]], pick, setPick)}
+        {group(PICKUP_OPTS, pick, setPick)}
         <h2 className="mb-3 mt-6 font-bold">التوصيل: نوصل ملابسك إلى</h2>
-        {group([["تعليقة الباب", "نعلّق الكيس على باب بيتك"], ["يد بيد", "تستلم الطلب مباشرة"], ["موقع مختلف عن المحفوظ", "مثل العمل"]], drop, setDrop)}
+        {group(DROP_OPTS, drop, setDrop)}
         <GoldBtn onClick={() => setSaved(true)} className="mt-6 w-full">{saved ? "تم الحفظ ✓" : "حفظ الخيارات"}</GoldBtn>
       </div>
     </div>
