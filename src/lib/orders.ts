@@ -5,8 +5,18 @@ import { supabase } from "@/integrations/supabase/client";
 export type Order = {
   id: string; kind: "pickup" | "drop"; customer: string; phone: string; area: string;
   time: string; pieces: number; handover: string; total: number; paid: boolean; step: number;
-  notes?: string; photos?: string[];
+  notes?: string; photos?: string[]; privacy?: boolean; received?: boolean;
 };
+
+// handover is stored as "استلام: X · تسليم: Y"
+export function splitHandover(h: string) {
+  const m = h.match(/استلام:\s*(.+?)\s*·\s*تسليم:\s*(.+)/);
+  return m ? { pick: m[1], drop: m[2] } : { pick: h, drop: h };
+}
+
+export async function confirmReceived(id: string) {
+  await supabase.from("orders").update({ received: true }).eq("id", id);
+}
 
 export const PICKUP_STEPS = ["جديد", "في الطريق", "وصلت", "تم الاستلام"];
 export const DROP_STEPS = ["جاهز", "في الطريق", "وصلت", "تم التسليم"];
@@ -34,7 +44,7 @@ export async function sendToDelivery(id: string) {
 
 const toOrder = (r: Record<string, unknown>): Order => ({ ...(r as Order), total: Number(r["total"]) });
 
-export async function createOrder(o: Pick<Order, "time" | "pieces" | "total" | "paid" | "handover"> & { notes?: string; photos?: string[] }): Promise<string> {
+export async function createOrder(o: Pick<Order, "time" | "pieces" | "total" | "paid" | "handover"> & { notes?: string; photos?: string[]; privacy?: boolean }): Promise<string> {
   const id = `N-${Math.floor(1000 + Math.random() * 9000)}`;
   const { error } = await supabase.from("orders").insert({ id, kind: "pickup", step: 0, ...o });
   if (error) throw error;
@@ -75,4 +85,14 @@ export function useOrder(id: string | null) {
     setOrder(data ? toOrder(data as Record<string, unknown>) : null);
   }, id ?? "none");
   return order;
+}
+
+export function useMyOrders(ids: string[]) {
+  const [orders, setOrders] = useState<Order[]>([]);
+  useLive(async () => {
+    if (!ids.length) return setOrders([]);
+    const { data } = await supabase.from("orders").select("*").in("id", ids).order("created_at", { ascending: false });
+    setOrders((data ?? []).map((r) => toOrder(r as Record<string, unknown>)));
+  }, ids.join(",") || "none");
+  return orders;
 }
