@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, beforeEach } from "vitest";
 
 import { Route } from "@/routes/driver";
@@ -7,9 +7,6 @@ import { Route } from "@/routes/driver";
 const DriverApp = Route.options.component as React.ComponentType;
 const customerSource = readFileSync("src/routes/index.tsx", "utf8");
 const driverSource = readFileSync("src/routes/driver.tsx", "utf8");
-const KEY = "naseg-driver-v1";
-
-const openTask = (name: string) => fireEvent.click(screen.getByRole("button", { name: new RegExp(name) }));
 
 describe("Driver app is its own app", () => {
   beforeEach(() => localStorage.clear());
@@ -25,25 +22,24 @@ describe("Driver app is its own app", () => {
     expect(screen.queryByRole("link", { name: /العودة/ })).not.toBeInTheDocument();
     expect(screen.queryByText("تطبيق العميل")).not.toBeInTheDocument();
   });
+});
 
-  it("saves the driver's progress under its own key only", () => {
-    render(<DriverApp />);
-    openTask("عبدالله السالم");
-    fireEvent.click(screen.getByRole("button", { name: "ابدأ التوجه للعميل" }));
-
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? "{}") as { tasks: { id: string; step: number }[] };
-    expect(saved.tasks.find((t) => t.id === "N-1042")?.step).toBe(1);
-    expect(Object.keys(localStorage)).toEqual([KEY]);
+describe("Driver task list shows real orders only", () => {
+  it("has no seed tasks in the source", () => {
+    expect(driverSource).not.toContain("SEED");
+    expect(driverSource).not.toContain("عبدالله السالم");
+    expect(driverSource).not.toContain("فهد العتيبي");
   });
 
-  it("reopens the driver's saved day instead of the starting list", () => {
-    localStorage.setItem(KEY, JSON.stringify({
-      online: true,
-      tasks: [{ id: "N-1042", kind: "pickup", customer: "عبدالله السالم", phone: "0500000001", area: "حي النرجس", time: "4:00 م", pieces: 6, handover: "تعليقة الباب", total: 24, paid: true, step: 3 }],
-    }));
+  it("keeps nothing in local storage", () => {
+    expect(driverSource).not.toContain("localStorage");
     render(<DriverApp />);
+    expect(Object.keys(localStorage)).toEqual([]);
+  });
 
-    expect(screen.getByText("تم الاستلام")).toBeInTheDocument();
-    expect(screen.queryByText("فهد العتيبي")).not.toBeInTheDocument();
+  it("shows a clear empty state when there are no orders", () => {
+    render(<DriverApp />);
+    expect(screen.getByText("لا توجد طلبات حاليًا")).toBeInTheDocument();
+    expect(screen.getByText(/أي طلب جديد من العملاء يظهر هنا فورًا/)).toBeInTheDocument();
   });
 });

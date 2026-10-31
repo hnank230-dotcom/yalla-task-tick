@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useOrders, advanceOrder } from "@/lib/orders";
 import {
   MapPin, Phone, MessageCircle, Package, Truck, CheckCircle2, ChevronLeft,
-  Wallet, User, ListChecks, Navigation, Clock, Power, RotateCcw,
+  Wallet, User, ListChecks, Navigation, Clock, Power, Inbox,
 } from "lucide-react";
 
 export const Route = createFileRoute("/driver")({
@@ -31,62 +31,17 @@ const STEPS: Record<Kind, string[]> = {
   drop: ["جاهز", "في الطريق", "وصلت", "تم التسليم"],
 };
 
-const SEED: Task[] = [
-  { id: "N-1042", kind: "pickup", customer: "عبدالله السالم", phone: "0500000001", area: "حي النرجس، شارع 12", time: "4:00 - 5:00 م", pieces: 6, handover: "تعليقة الباب", total: 24, paid: true, step: 0 },
-  { id: "N-1043", kind: "pickup", customer: "فهد العتيبي", phone: "0500000002", area: "حي الياسمين، فيلا 8", time: "5:00 - 6:00 م", pieces: 4, handover: "يد بيد", total: 16, paid: false, step: 0 },
-  { id: "N-1031", kind: "drop", customer: "سارة القحطاني", phone: "0500000003", area: "حي الملقا، عمارة 3", time: "6:00 - 7:00 م", pieces: 9, handover: "تعليقة الباب", total: 36, paid: true, step: 0 },
-  { id: "N-1028", kind: "drop", customer: "محمد الدوسري", phone: "0500000004", area: "حي العارض، شارع 5", time: "7:00 - 8:00 م", pieces: 3, handover: "يد بيد", total: 12, paid: false, step: 0 },
-];
-
-// The driver app keeps its own data, under its own key, so nothing it stores
-// touches the customer app.
-const STORE_KEY = "naseg-driver-v1";
-
-type Saved = { tasks: Task[]; online: boolean };
-
-function loadSaved(): Saved {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (!raw) return { tasks: SEED, online: true };
-    const parsed = JSON.parse(raw) as Partial<Saved>;
-    if (!Array.isArray(parsed.tasks) || parsed.tasks.length === 0) return { tasks: SEED, online: true };
-    return { tasks: parsed.tasks as Task[], online: parsed.online ?? true };
-  } catch {
-    return { tasks: SEED, online: true };
-  }
-}
-
 function DriverApp() {
   const [tab, setTab] = useState<"tasks" | "earn" | "me">("tasks");
-  const [tasks, setTasks] = useState<Task[]>(SEED);
   const [openId, setOpenId] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
-  const [ready, setReady] = useState(false);
-  const live = useOrders();
-  const liveIds = new Set(live.map((o) => o.id));
-  const all = [...live, ...tasks.filter((t) => !liveIds.has(t.id))];
+  const all = useOrders();
   const open = all.find((t) => t.id === openId);
 
-  // Read the driver's own saved day only after mount, so the server render and
-  // the first client render agree.
-  useEffect(() => {
-    const saved = loadSaved();
-    setTasks(saved.tasks);
-    setOnline(saved.online);
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (ready) localStorage.setItem(STORE_KEY, JSON.stringify({ tasks, online }));
-  }, [tasks, online, ready]);
-
   const advance = (id: string) => {
-    const o = live.find((x) => x.id === id);
-    if (o) return void advanceOrder(o);
-    setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, step: Math.min(t.step + 1, 3), paid: t.step === 2 ? true : t.paid } : t)));
+    const o = all.find((x) => x.id === id);
+    if (o) void advanceOrder(o);
   };
-
-  const resetDay = () => { setTasks(SEED); setOpenId(null); };
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-background pb-24 font-sans">
@@ -120,7 +75,7 @@ function DriverApp() {
         ) : tab === "earn" ? (
           <Earnings tasks={all} />
         ) : (
-          <Profile onReset={resetDay} />
+          <Profile />
         )}
       </main>
 
@@ -158,27 +113,37 @@ function TaskList({ tasks, online, onOpen }: { tasks: Task[]; online: boolean; o
             className={`rounded-full px-4 py-1.5 text-sm ${f === k ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>{l}</button>
         ))}
       </div>
-      <div className="space-y-3">
-        {list.map((t) => (
-          <button key={t.id} onClick={() => onOpen(t.id)} className="w-full rounded-2xl bg-card p-4 text-right shadow-soft">
-            <div className="flex items-center justify-between">
-              <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${t.kind === "pickup" ? "bg-accent/20 text-accent-foreground" : "bg-primary/10 text-primary"}`}>
-                {t.kind === "pickup" ? <Package className="size-3.5" /> : <Truck className="size-3.5" />}
-                {t.kind === "pickup" ? "استلام" : "تسليم"}
-              </span>
-              <span className={`text-xs ${t.step === 3 ? "text-success" : "text-muted-foreground"}`}>{STEPS[t.kind][t.step]}</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between">
-              <div>
-                <p className="font-display text-lg">{t.customer}</p>
-                <p className="flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="size-3.5" />{t.area}</p>
-                <p className="flex items-center gap-1 text-sm text-muted-foreground"><Clock className="size-3.5" />{t.time} · {t.pieces} قطع</p>
+      {list.length === 0 ? (
+        <div className="mt-10 flex flex-col items-center gap-3 text-center">
+          <span className="flex size-16 items-center justify-center rounded-full bg-secondary">
+            <Inbox className="size-8 text-muted-foreground" />
+          </span>
+          <p className="font-display text-lg">لا توجد طلبات حاليًا</p>
+          <p className="text-sm text-muted-foreground">أي طلب جديد من العملاء يظهر هنا فورًا.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {list.map((t) => (
+            <button key={t.id} onClick={() => onOpen(t.id)} className="w-full rounded-2xl bg-card p-4 text-right shadow-soft">
+              <div className="flex items-center justify-between">
+                <span className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${t.kind === "pickup" ? "bg-accent/20 text-accent-foreground" : "bg-primary/10 text-primary"}`}>
+                  {t.kind === "pickup" ? <Package className="size-3.5" /> : <Truck className="size-3.5" />}
+                  {t.kind === "pickup" ? "استلام" : "تسليم"}
+                </span>
+                <span className={`text-xs ${t.step === 3 ? "text-success" : "text-muted-foreground"}`}>{STEPS[t.kind][t.step]}</span>
               </div>
-              <ChevronLeft className="size-5 text-muted-foreground" />
-            </div>
-          </button>
-        ))}
-      </div>
+              <div className="mt-2 flex items-center justify-between">
+                <div>
+                  <p className="font-display text-lg">{t.customer}</p>
+                  <p className="flex items-center gap-1 text-sm text-muted-foreground"><MapPin className="size-3.5" />{t.area}</p>
+                  <p className="flex items-center gap-1 text-sm text-muted-foreground"><Clock className="size-3.5" />{t.time} · {t.pieces} قطع</p>
+                </div>
+                <ChevronLeft className="size-5 text-muted-foreground" />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </>
   );
 }
@@ -247,7 +212,7 @@ function Earnings({ tasks }: { tasks: Task[] }) {
   );
 }
 
-function Profile({ onReset }: { onReset: () => void }) {
+function Profile() {
   return (
     <div className="space-y-3">
       <div className="rounded-2xl bg-card p-5 text-center shadow-soft">
@@ -258,9 +223,6 @@ function Profile({ onReset }: { onReset: () => void }) {
       {["المنطقة: شمال الرياض", "التقييم: 4.9 ★", "الدعم الفني"].map((l) => (
         <div key={l} className="rounded-2xl bg-card p-4 shadow-soft">{l}</div>
       ))}
-      <button onClick={onReset} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-soft">
-        <RotateCcw className="size-4" /> بدء يوم جديد (إرجاع المهام الأصلية)
-      </button>
     </div>
   );
 }
