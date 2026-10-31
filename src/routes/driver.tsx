@@ -1,8 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
-  MapPin, Phone, MessageCircle, Package, Truck, CheckCircle2, ChevronLeft, ChevronRight,
-  Wallet, User, ListChecks, Navigation, Clock, Power,
+  MapPin, Phone, MessageCircle, Package, Truck, CheckCircle2, ChevronLeft,
+  Wallet, User, ListChecks, Navigation, Clock, Power, RotateCcw,
 } from "lucide-react";
 
 export const Route = createFileRoute("/driver")({
@@ -37,15 +37,49 @@ const SEED: Task[] = [
   { id: "N-1028", kind: "drop", customer: "محمد الدوسري", phone: "0500000004", area: "حي العارض، شارع 5", time: "7:00 - 8:00 م", pieces: 3, handover: "يد بيد", total: 12, paid: false, step: 0 },
 ];
 
+// The driver app keeps its own data, under its own key, so nothing it stores
+// touches the customer app.
+const STORE_KEY = "naseg-driver-v1";
+
+type Saved = { tasks: Task[]; online: boolean };
+
+function loadSaved(): Saved {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return { tasks: SEED, online: true };
+    const parsed = JSON.parse(raw) as Partial<Saved>;
+    if (!Array.isArray(parsed.tasks) || parsed.tasks.length === 0) return { tasks: SEED, online: true };
+    return { tasks: parsed.tasks as Task[], online: parsed.online ?? true };
+  } catch {
+    return { tasks: SEED, online: true };
+  }
+}
+
 function DriverApp() {
   const [tab, setTab] = useState<"tasks" | "earn" | "me">("tasks");
-  const [tasks, setTasks] = useState(SEED);
+  const [tasks, setTasks] = useState<Task[]>(SEED);
   const [openId, setOpenId] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
+  const [ready, setReady] = useState(false);
   const open = tasks.find((t) => t.id === openId);
+
+  // Read the driver's own saved day only after mount, so the server render and
+  // the first client render agree.
+  useEffect(() => {
+    const saved = loadSaved();
+    setTasks(saved.tasks);
+    setOnline(saved.online);
+    setReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (ready) localStorage.setItem(STORE_KEY, JSON.stringify({ tasks, online }));
+  }, [tasks, online, ready]);
 
   const advance = (id: string) =>
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, step: Math.min(t.step + 1, 3), paid: t.step === 2 ? true : t.paid } : t)));
+
+  const resetDay = () => { setTasks(SEED); setOpenId(null); };
 
   return (
     <div className="mx-auto min-h-screen max-w-md bg-background pb-24 font-sans">
@@ -54,9 +88,7 @@ function DriverApp() {
           <div>
             <p className="text-sm opacity-80">مرحبًا، خالد</p>
             <h1 className="font-display text-2xl">ناصع <span className="text-accent">للمندوب</span></h1>
-            <Link to="/" className="mt-1 inline-flex items-center gap-1 text-xs opacity-75">
-              <ChevronRight className="size-3.5" /> العودة لتطبيق العميل
-            </Link>
+            <p className="mt-1 text-xs opacity-60">لوحة الاستلام والتسليم</p>
           </div>
           <button
             onClick={() => setOnline(!online)}
@@ -81,7 +113,7 @@ function DriverApp() {
         ) : tab === "earn" ? (
           <Earnings tasks={tasks} />
         ) : (
-          <Profile />
+          <Profile onReset={resetDay} />
         )}
       </main>
 
@@ -192,22 +224,23 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
 }
 
 function Earnings({ tasks }: { tasks: Task[] }) {
-  const done = tasks.filter((t) => t.step === 3).length;
+  const done = tasks.filter((t) => t.step === 3);
+  const cash = done.reduce((a, t) => a + t.total, 0);
   return (
     <div className="space-y-3">
       <div className="rounded-2xl bg-primary p-5 text-primary-foreground">
         <p className="text-sm opacity-80">أرباح اليوم</p>
-        <p className="font-display text-3xl text-accent">{done * 8} ر.س</p>
-        <p className="text-xs opacity-80">{done} مهام منجزة × 8 ر.س</p>
+        <p className="font-display text-3xl text-accent">{done.length * 8} ر.س</p>
+        <p className="text-xs opacity-80">{done.length} مهام منجزة × 8 ر.س</p>
       </div>
-      {[["هذا الأسبوع", "312 ر.س"], ["هذا الشهر", "1,280 ر.س"], ["نقد بحوزتك", `${tasks.filter((t) => t.step === 3 && t.total && t.handover).length ? tasks.filter((t) => t.step === 3).reduce((a, t) => a + t.total, 0) : 0} ر.س`]].map(([l, v]) => (
+      {[["هذا الأسبوع", "312 ر.س"], ["هذا الشهر", "1,280 ر.س"], ["نقد بحوزتك", `${cash} ر.س`]].map(([l, v]) => (
         <div key={l} className="flex justify-between rounded-2xl bg-card p-4 shadow-soft"><span className="text-muted-foreground">{l}</span><b>{v}</b></div>
       ))}
     </div>
   );
 }
 
-function Profile() {
+function Profile({ onReset }: { onReset: () => void }) {
   return (
     <div className="space-y-3">
       <div className="rounded-2xl bg-card p-5 text-center shadow-soft">
@@ -218,6 +251,9 @@ function Profile() {
       {["المنطقة: شمال الرياض", "التقييم: 4.9 ★", "الدعم الفني"].map((l) => (
         <div key={l} className="rounded-2xl bg-card p-4 shadow-soft">{l}</div>
       ))}
+      <button onClick={onReset} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground shadow-soft">
+        <RotateCcw className="size-4" /> بدء يوم جديد (إرجاع المهام الأصلية)
+      </button>
     </div>
   );
 }

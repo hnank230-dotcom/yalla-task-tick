@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import {
   Bell, Shirt, Flame, Droplet, Grid3x3, Home, ShoppingBag, Star, User, ChevronRight, ChevronLeft,
@@ -657,10 +657,6 @@ function AccountScreen({ go, openInvoice }: { go: (s: Screen) => void; openInvoi
       <button onClick={() => go("delivery")} className="mt-4 flex w-full items-center justify-between rounded-2xl border border-border bg-card p-4">
         <span className="font-bold">خيارات التسليم</span><ChevronLeft className="h-5 w-5" />
       </button>
-      <Link to="/driver" className="mt-3 flex w-full items-center justify-between rounded-2xl border-2 border-accent bg-card p-4">
-        <span className="flex items-center gap-3"><Truck className="h-5 w-5 text-accent-foreground" /><span className="font-bold">تطبيق المندوب</span></span>
-        <ChevronLeft className="h-5 w-5" />
-      </Link>
       <button onClick={openInvoice} className="mt-3 flex w-full items-center justify-between rounded-2xl border border-border bg-card p-4">
         <span className="font-bold">فواتيري السابقة</span><ChevronLeft className="h-5 w-5" />
       </button>
