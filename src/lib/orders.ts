@@ -5,14 +5,36 @@ import { supabase } from "@/integrations/supabase/client";
 export type Order = {
   id: string; kind: "pickup" | "drop"; customer: string; phone: string; area: string;
   time: string; pieces: number; handover: string; total: number; paid: boolean; step: number;
-  notes?: string;
+  notes?: string; photos?: string[];
 };
 
 export const PICKUP_STEPS = ["جديد", "في الطريق", "وصلت", "تم الاستلام"];
+export const DROP_STEPS = ["جاهز", "في الطريق", "وصلت", "تم التسليم"];
+export const stepLabel = (o: Pick<Order, "kind" | "step">) => (o.kind === "drop" ? DROP_STEPS : PICKUP_STEPS)[o.step];
+
+const BUCKET = "order-photos";
+export async function uploadPhotos(files: File[]): Promise<string[]> {
+  const paths: string[] = [];
+  for (const f of files) {
+    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${f.name.split(".").pop() || "jpg"}`;
+    const { error } = await supabase.storage.from(BUCKET).upload(path, f, { contentType: f.type });
+    if (!error) paths.push(path);
+  }
+  return paths;
+}
+export async function photoUrls(paths: string[]): Promise<string[]> {
+  if (!paths.length) return [];
+  const { data } = await supabase.storage.from(BUCKET).createSignedUrls(paths, 3600);
+  return (data ?? []).map((d) => d.signedUrl).filter(Boolean) as string[];
+}
+// Laundry finished cleaning: the order becomes a delivery task for the driver.
+export async function sendToDelivery(id: string) {
+  await supabase.from("orders").update({ kind: "drop", step: 0 }).eq("id", id);
+}
 
 const toOrder = (r: Record<string, unknown>): Order => ({ ...(r as Order), total: Number(r["total"]) });
 
-export async function createOrder(o: Pick<Order, "time" | "pieces" | "total" | "paid" | "handover"> & { notes?: string }): Promise<string> {
+export async function createOrder(o: Pick<Order, "time" | "pieces" | "total" | "paid" | "handover"> & { notes?: string; photos?: string[] }): Promise<string> {
   const id = `N-${Math.floor(1000 + Math.random() * 9000)}`;
   const { error } = await supabase.from("orders").insert({ id, kind: "pickup", step: 0, ...o });
   if (error) throw error;
