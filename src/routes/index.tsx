@@ -535,41 +535,39 @@ function DoneScreen({ go, qty, time, payMethod, orderId }: {
 /* ---------- tracking ---------- */
 function TrackScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string | null }) {
   const live = useOrder(orderId ?? null);
-  const steps = [["تم الاستلام من الباب", 1], ["الغسيل", 1], ["الكي والتغليف", 1], ["في الطريق إليك", 0.5], ["التسليم على بابك", 0]] as const;
+  const steps = ["استلام المندوب لطلبك", "الغسيل والكي في المغسلة", "جاهز للتسليم", "في الطريق إليك", "تم التسليم"];
+  // 0..4 = index of current stage; done stages are below it.
+  const stage = !live ? -1 : live.kind === "pickup" ? (live.step < 3 ? 0 : 1) : live.step === 0 ? 2 : live.step < 3 ? 3 : 5;
   return (
     <div className="pb-8">
-      <Header title="تتبع الطلب" back={() => go("home")} extra={<span className="text-sm text-muted-foreground">رقم {live?.id ?? "1042"}</span>} />
+      <Header title="تتبع الطلب" back={() => go("home")} extra={live ? <span className="text-sm text-muted-foreground">رقم {live.id}</span> : undefined} />
       <div className="px-5">
-        {live && (
-          <div className="mb-4 rounded-2xl border-2 border-accent bg-card p-4">
-            <p className="text-xs text-muted-foreground">حالة المندوب الآن (مباشر)</p>
-            <p className="mt-1 font-display text-2xl font-bold">{live.kind === "pickup" && live.step === 3 ? "طلبك في المغسلة" : stepLabel(live)}</p>
-            <div className="mt-3 flex gap-1.5">
-              {(live.kind === "drop" ? DROP_STEPS : PICKUP_STEPS).map((st, i) => <span key={st} className={`h-1.5 flex-1 rounded-full ${i <= live.step ? "bg-accent" : "bg-border"}`} />)}
+        {!live ? (
+          <div className="mt-16 flex flex-col items-center gap-3 text-center">
+            <p className="font-display text-lg">لا يوجد طلب حالي</p>
+            <GoldBtn onClick={() => go("order")}>اطلب استلام الآن</GoldBtn>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-3xl bg-primary p-6 text-primary-foreground">
+              <span className="text-sm text-accent">الحالة الآن (مباشر)</span>
+              <p className="mt-2 font-display text-3xl font-bold">{steps[Math.min(stage, 4)]}</p>
+              <p className="mt-1 text-sm opacity-80">{stepLabel(live)} · {live.handover}</p>
+              <div className="mt-5 h-1.5 rounded-full bg-primary-foreground/20"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, (stage + 1) * 20)}%` }} /></div>
             </div>
-          </div>
+            <ol className="mt-6 space-y-0">
+              {steps.map((t, i) => (
+                <li key={t} className="flex items-start gap-4">
+                  <div className="flex flex-col items-center">
+                    <span className={`grid h-8 w-8 place-items-center rounded-full ${i < stage ? "bg-accent" : i === stage ? "border-2 border-accent" : "border-2 border-border"}`}>{i < stage && <Check className="h-4 w-4" />}</span>
+                    {i < steps.length - 1 && <span className={`h-8 w-0.5 ${i < stage ? "bg-accent" : "bg-border"}`} />}
+                  </div>
+                  <span className={`pt-1 ${i <= stage ? "font-bold" : "text-muted-foreground"}`}>{t}</span>
+                </li>
+              ))}
+            </ol>
+          </>
         )}
-        <div className="rounded-3xl bg-primary p-6 text-primary-foreground">
-          <div className="flex justify-between text-sm">
-            <span className="text-accent">الحالة الآن</span>
-            <span className="text-left"><b>عميل ناصع</b></span>
-          </div>
-          <p className="mt-2 font-display text-4xl font-bold">في الطريق إليك</p>
-          <p className="mt-1 text-sm opacity-80">الوصول المتوقع بعد ٢٠ دقيقة</p>
-          <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary-foreground/10 px-4 py-2 text-sm"><Users className="h-4 w-4 text-accent" /> ٣ عملاء قبلك على مسار المندوب</span>
-          <div className="mt-5 h-1.5 rounded-full bg-primary-foreground/20"><div className="h-full w-4/5 rounded-full bg-accent" /></div>
-        </div>
-        <ol className="mt-6 space-y-0">
-          {steps.map(([t, s], i) => (
-            <li key={t} className="flex items-start gap-4">
-              <div className="flex flex-col items-center">
-                <span className={`grid h-8 w-8 place-items-center rounded-full ${s === 1 ? "bg-accent" : s ? "border-2 border-accent" : "border-2 border-border"}`}>{s === 1 && <Check className="h-4 w-4" />}</span>
-                {i < steps.length - 1 && <span className={`h-8 w-0.5 ${s === 1 ? "bg-accent" : "bg-border"}`} />}
-              </div>
-              <span className={`pt-1 ${s ? "font-bold" : "text-muted-foreground"}`}>{t}</span>
-            </li>
-          ))}
-        </ol>
         <DriverCard />
         <button onClick={() => go("map")} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border-2 border-accent bg-primary py-4 font-bold text-primary-foreground">
           <MapPin className="h-5 w-5 text-accent" /> تتبع المندوب على الخريطة
