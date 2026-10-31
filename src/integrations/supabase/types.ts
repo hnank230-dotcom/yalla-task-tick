@@ -22,6 +22,7 @@ export type Database = {
           handover: string
           id: string
           kind: string
+          notes: string
           paid: boolean
           phone: string
           pieces: number
@@ -36,6 +37,7 @@ export type Database = {
           handover?: string
           id: string
           kind?: string
+          notes?: string
           paid?: boolean
           phone?: string
           pieces?: number
@@ -50,6 +52,7 @@ export type Database = {
           handover?: string
           id?: string
           kind?: string
+          notes?: string
           paid?: boolean
           phone?: string
           pieces?: number

@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useOrders, advanceOrder } from "@/lib/orders";
 import {
   MapPin, Phone, MessageCircle, Package, Truck, CheckCircle2, ChevronLeft,
-  Wallet, User, ListChecks, Navigation, Clock, Power, Inbox,
+  History, BookOpen, StickyNote, User, ListChecks, Navigation, Clock, Power, Inbox,
 } from "lucide-react";
 
 export const Route = createFileRoute("/driver")({
@@ -24,6 +24,7 @@ type Kind = "pickup" | "drop";
 type Task = {
   id: string; kind: Kind; customer: string; phone: string; area: string;
   time: string; pieces: number; handover: string; total: number; paid: boolean; step: number;
+  notes?: string;
 };
 
 const STEPS: Record<Kind, string[]> = {
@@ -32,11 +33,14 @@ const STEPS: Record<Kind, string[]> = {
 };
 
 function DriverApp() {
-  const [tab, setTab] = useState<"tasks" | "earn" | "me">("tasks");
+  const [tab, setTab] = useState<"tasks" | "past" | "guide" | "me">("tasks");
   const [openId, setOpenId] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
   const all = useOrders();
   const open = all.find((t) => t.id === openId);
+  // Finished tasks (step 3) leave the live list and move entirely to "المهام السابقة".
+  const active = all.filter((t) => t.step < 3);
+  const past = all.filter((t) => t.step === 3);
 
   const advance = (id: string) => {
     const o = all.find((x) => x.id === id);
@@ -71,18 +75,20 @@ function DriverApp() {
         {open ? (
           <TaskDetail t={open} back={() => setOpenId(null)} advance={() => advance(open.id)} />
         ) : tab === "tasks" ? (
-          <TaskList tasks={all} online={online} onOpen={setOpenId} />
-        ) : tab === "earn" ? (
-          <Earnings tasks={all} />
+          <TaskList tasks={active} online={online} onOpen={setOpenId} />
+        ) : tab === "past" ? (
+          <PastTasks tasks={past} onOpen={setOpenId} />
+        ) : tab === "guide" ? (
+          <Instructions tasks={active} />
         ) : (
           <Profile />
         )}
       </main>
 
       <nav className="fixed bottom-0 left-1/2 flex w-full max-w-md -translate-x-1/2 justify-around border-t bg-card py-2">
-        {([["tasks", "المهام", ListChecks], ["earn", "الأرباح", Wallet], ["me", "حسابي", User]] as const).map(([k, l, I]) => (
+        {([["tasks", "المهام", ListChecks], ["past", "السابقة", History], ["guide", "التعليمات", BookOpen], ["me", "حسابي", User]] as const).map(([k, l, I]) => (
           <button key={k} onClick={() => { setTab(k); setOpenId(null); }}
-            className={`flex flex-col items-center gap-0.5 px-4 text-xs ${tab === k ? "text-primary" : "text-muted-foreground"}`}>
+            className={`flex flex-col items-center gap-0.5 px-2 text-xs ${tab === k ? "text-primary" : "text-muted-foreground"}`}>
             <I className="size-5" />{l}
           </button>
         ))}
@@ -154,7 +160,7 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
   const next = ["ابدأ التوجه للعميل", "وصلت للموقع", t.kind === "pickup" ? "تأكيد استلام القطع" : "تأكيد تسليم الطلب"][t.step];
   return (
     <div className="space-y-4">
-      <button onClick={back} className="text-sm text-muted-foreground">→ رجوع للمهام</button>
+      <button onClick={back} className="text-sm text-muted-foreground">→ رجوع</button>
       <div className="rounded-2xl bg-card p-4 shadow-soft">
         <p className="text-xs text-muted-foreground">طلب {t.id} · {t.kind === "pickup" ? "استلام" : "تسليم"}</p>
         <p className="font-display text-xl">{t.customer}</p>
@@ -173,6 +179,13 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
         <div className="mt-2 flex justify-between text-sm"><span className="text-muted-foreground">المبلغ</span>
           <span>{t.total} ر.س · {t.paid ? <b className="text-success">مدفوع</b> : <b className="text-destructive">تحصيل نقدي</b>}</span></div>
       </div>
+
+      {t.notes ? (
+        <div className="rounded-2xl border border-accent bg-card p-4 shadow-soft">
+          <p className="flex items-center gap-1 text-sm font-bold"><StickyNote className="size-4 text-accent" />ملاحظات الزبون</p>
+          <p className="mt-1 text-sm">{t.notes}</p>
+        </div>
+      ) : null}
 
       <ol className="flex justify-between rounded-2xl bg-card p-4 shadow-soft">
         {steps.map((s, i) => (
@@ -195,19 +208,60 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
   );
 }
 
-function Earnings({ tasks }: { tasks: Task[] }) {
-  const done = tasks.filter((t) => t.step === 3);
-  const cash = done.reduce((a, t) => a + t.total, 0);
+function TaskCard({ t, onOpen }: { t: Task; onOpen: (id: string) => void }) {
+  return (
+    <button onClick={() => onOpen(t.id)} className="w-full rounded-2xl bg-card p-4 text-right shadow-soft">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">طلب {t.id} · {t.kind === "pickup" ? "استلام" : "تسليم"}</span>
+        <span className="flex items-center gap-1 text-xs text-success"><CheckCircle2 className="size-3.5" />{STEPS[t.kind][3]}</span>
+      </div>
+      <p className="mt-1 font-display text-lg">{t.customer}</p>
+      <p className="text-sm text-muted-foreground">{t.area} · {t.pieces} قطع · {t.total} ر.س</p>
+    </button>
+  );
+}
+
+function PastTasks({ tasks, onOpen }: { tasks: Task[]; onOpen: (id: string) => void }) {
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl bg-primary p-5 text-primary-foreground">
-        <p className="text-sm opacity-80">أرباح اليوم</p>
-        <p className="font-display text-3xl text-accent">{done.length * 8} ر.س</p>
-        <p className="text-xs opacity-80">{done.length} مهام منجزة × 8 ر.س</p>
-      </div>
-      {[["هذا الأسبوع", "312 ر.س"], ["هذا الشهر", "1,280 ر.س"], ["نقد بحوزتك", `${cash} ر.س`]].map(([l, v]) => (
-        <div key={l} className="flex justify-between rounded-2xl bg-card p-4 shadow-soft"><span className="text-muted-foreground">{l}</span><b>{v}</b></div>
-      ))}
+      <h2 className="font-display text-xl">المهام السابقة</h2>
+      {tasks.length === 0 ? (
+        <p className="mt-10 text-center text-muted-foreground">لا توجد مهام منجزة بعد.</p>
+      ) : tasks.map((t) => <TaskCard key={t.id} t={t} onOpen={onOpen} />)}
+    </div>
+  );
+}
+
+const STORE_RULES = [
+  "تأكد من عدد القطع أمام العميل أو صوّرها قبل إغلاق الكيس.",
+  "استخدم غلاف الخصوصية دائمًا ولا تفتح الكيس أمام أحد.",
+  "في تعليقة الباب: علّق الكيس وصوّره ثم أرسل الصورة للعميل.",
+  "لا تطرق الباب إذا اختار العميل الاستلام بدون إزعاج.",
+  "حصّل المبلغ النقدي كاملًا قبل التسليم إذا كان الطلب غير مدفوع.",
+  "التزم بموعد الاستلام، وإذا تأخرت أبلغ العميل برسالة.",
+];
+
+function Instructions({ tasks }: { tasks: Task[] }) {
+  const withNotes = tasks.filter((t) => t.notes);
+  return (
+    <div className="space-y-4">
+      <section className="rounded-2xl bg-primary p-5 text-primary-foreground">
+        <h2 className="flex items-center gap-2 font-display text-xl"><BookOpen className="size-5 text-accent" />تعليمات المتجر</h2>
+        <ol className="mt-3 list-decimal space-y-2 pr-5 text-sm">
+          {STORE_RULES.map((r) => <li key={r}>{r}</li>)}
+        </ol>
+      </section>
+      <section className="space-y-3">
+        <h2 className="flex items-center gap-2 font-display text-xl"><StickyNote className="size-5 text-accent" />ملاحظات الزبائن</h2>
+        {withNotes.length === 0 ? (
+          <p className="rounded-2xl bg-card p-4 text-center text-sm text-muted-foreground shadow-soft">لا توجد ملاحظات على المهام الحالية.</p>
+        ) : withNotes.map((t) => (
+          <div key={t.id} className="rounded-2xl border border-accent bg-card p-4 shadow-soft">
+            <p className="text-xs text-muted-foreground">طلب {t.id} · {t.customer}</p>
+            <p className="mt-1 text-sm">{t.notes}</p>
+          </div>
+        ))}
+      </section>
     </div>
   );
 }

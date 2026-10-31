@@ -60,12 +60,13 @@ function App() {
   const [invoice, setInvoice] = useState(false);
   const [time, setTime] = useState("اليوم مساءً");
   const [payMethod, setPayMethod] = useState("كاش عند الاستلام");
+  const [notes, setNotes] = useState("");
   const [orderId, setOrderId] = useState<string | null>(null);
   const placeOrder = (m: string) => {
     setPayMethod(m);
     const pieces = ALL.reduce((s, i) => s + (qty[i.name] || 0), 0);
     const total = ALL.reduce((s, i) => s + (qty[i.name] || 0) * i.price, 0);
-    createOrder({ time, pieces, total, paid: m !== "كاش عند الاستلام", handover: "تعليقة الباب" })
+    createOrder({ time, pieces, total, paid: m !== "كاش عند الاستلام", handover: "تعليقة الباب", notes: notes.trim() })
       .then(setOrderId)
       .catch(() => setOrderId(null));
   };
@@ -79,7 +80,7 @@ function App() {
     <div dir="rtl" className="mx-auto min-h-screen max-w-md bg-background font-sans text-foreground">
       <div className={tab ? "pb-24" : ""}>
         {screen === "home" && <HomeScreen go={go} />}
-        {screen === "order" && <OrderScreen go={go} qty={qty} setQty={setQty} extras={extras} setExtras={setExtras} time={time} setTime={setTime} />}
+        {screen === "order" && <OrderScreen go={go} qty={qty} setQty={setQty} extras={extras} setExtras={setExtras} time={time} setTime={setTime} notes={notes} setNotes={setNotes} />}
         {screen === "payment" && <PaymentScreen go={go} onPaid={placeOrder} />}
         {screen === "done" && <DoneScreen go={go} qty={qty} time={time} payMethod={payMethod} orderId={orderId} />}
         {screen === "track" && <TrackScreen go={go} orderId={orderId} />}
@@ -230,10 +231,11 @@ function BottomNav({ screen, go }: { screen: Screen; go: (s: Screen) => void }) 
 }
 
 /* ---------- new order ---------- */
-function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime }: {
+function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime, notes = "", setNotes = () => {} }: {
   go: (s: Screen) => void; qty: Record<string, number>; setQty: (q: Record<string, number>) => void;
   extras: string[]; setExtras: (e: string[]) => void;
   time: string; setTime: (t: string) => void;
+  notes?: string; setNotes?: (n: string) => void;
 }) {
   const [door, setDoor] = useState(true);
   const [privacy, setPrivacy] = useState(true);
@@ -284,6 +286,16 @@ function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime }: {
           <OptionRow icon={Truck} label="الاستلام من" opt={optionAt(PICKUP_OPTS, pick)} onOpen={() => setOptSheet("pick")} />
           <OptionRow icon={MapPin} label="التسليم إلى" opt={optionAt(DROP_OPTS, drop)} onOpen={() => setOptSheet("drop")} />
         </div>
+
+        <h2 className="mb-3 mt-7 font-bold">ملاحظات للمندوب</h2>
+        <textarea
+          aria-label="ملاحظات للمندوب"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="مثال: الثوب الأبيض بدون نشا، اتصل قبل الوصول"
+          rows={3}
+          className="w-full rounded-2xl border border-border bg-card p-4 text-sm outline-none focus:border-primary"
+        />
 
         <div className="mt-5 space-y-3">
           <div className="flex items-center gap-3 rounded-2xl bg-primary p-5 text-primary-foreground">
