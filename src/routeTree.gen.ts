@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DriverRouteImport } from './routes/driver'
+import { Route as LaundryRouteImport } from './routes/laundry'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const DriverRoute = DriverRouteImport.update({
   path: '/driver',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LaundryRoute = LaundryRouteImport.update({
+  id: '/laundry',
+  path: '/laundry',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/driver': typeof DriverRoute
+  '/laundry': typeof LaundryRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/driver': typeof DriverRoute
+  '/laundry': typeof LaundryRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/driver': typeof DriverRoute
+  '/laundry': typeof LaundryRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/driver'
+  fullPaths: '/' | '/driver' | '/laundry'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/driver'
-  id: '__root__' | '/' | '/driver'
+  to: '/' | '/driver' | '/laundry'
+  id: '__root__' | '/' | '/driver' | '/laundry'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DriverRoute: typeof DriverRoute
+  LaundryRoute: typeof LaundryRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DriverRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/laundry': {
+      id: '/laundry'
+      path: '/laundry'
+      fullPath: '/laundry'
+      preLoaderRoute: typeof LaundryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DriverRoute: DriverRoute,
+  LaundryRoute: LaundryRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
