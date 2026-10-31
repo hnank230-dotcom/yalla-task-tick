@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { createOrder, useOrder, PICKUP_STEPS, DROP_STEPS, stepLabel, uploadPhotos } from "@/lib/orders";
+import { createOrder, useOrder, useMyOrders, confirmReceived, PICKUP_STEPS, DROP_STEPS, stepLabel, uploadPhotos } from "@/lib/orders";
 import {
   Bell, Shirt, Flame, Droplet, Grid3x3, Home, ShoppingBag, Star, User, ChevronRight, ChevronLeft,
   Plus, Minus, X, Search, Banknote, CreditCard, Check, Lock, Phone, MessageSquare, MapPin, Users,
@@ -65,17 +65,29 @@ function App() {
   const [orderId, setOrderIdState] = useState<string | null>(null);
   const [photos, setPhotos] = useState<File[]>([]);
   const [handover, setHandover] = useState("استلام: تعليقة الباب · تسليم: تعليقة الباب");
-  useEffect(() => { setOrderIdState(localStorage.getItem("naseg-last-order")); }, []);
+  const [privacy, setPrivacy] = useState(true);
+  const [myIds, setMyIds] = useState<string[]>([]);
+  useEffect(() => {
+    const last = localStorage.getItem("naseg-last-order");
+    setOrderIdState(last);
+    let ids: string[] = [];
+    try { ids = JSON.parse(localStorage.getItem("naseg-my-orders") || "[]"); } catch { /* ignore */ }
+    if (last && !ids.includes(last)) ids.unshift(last);
+    setMyIds(ids);
+  }, []);
   const setOrderId = (id: string | null) => {
     setOrderIdState(id);
-    if (id) localStorage.setItem("naseg-last-order", id);
+    if (id) {
+      localStorage.setItem("naseg-last-order", id);
+      setMyIds((prev) => { const n = [id, ...prev.filter((x) => x !== id)]; localStorage.setItem("naseg-my-orders", JSON.stringify(n)); return n; });
+    }
   };
   const placeOrder = (m: string) => {
     setPayMethod(m);
     const pieces = ALL.reduce((s, i) => s + (qty[i.name] || 0), 0);
     const total = ALL.reduce((s, i) => s + (qty[i.name] || 0) * i.price, 0);
     uploadPhotos(photos)
-      .then((paths) => createOrder({ time, pieces, total, paid: m !== "كاش عند الاستلام", handover, notes: notes.trim(), photos: paths }))
+      .then((paths) => createOrder({ time, pieces, total, paid: m !== "كاش عند الاستلام", handover, privacy, notes: notes.trim(), photos: paths }))
       .then((id) => { setOrderId(id); setPhotos([]); setNotes(""); })
       .catch(() => setOrderId(null));
   };
@@ -89,13 +101,13 @@ function App() {
     <div dir="rtl" className="mx-auto min-h-screen max-w-md bg-background font-sans text-foreground">
       <div className={tab ? "pb-24" : ""}>
         {screen === "home" && <HomeScreen go={go} orderId={orderId} />}
-        {screen === "order" && <OrderScreen go={go} qty={qty} setQty={setQty} extras={extras} setExtras={setExtras} time={time} setTime={setTime} notes={notes} setNotes={setNotes} photos={photos} setPhotos={setPhotos} setHandover={setHandover} />}
+        {screen === "order" && <OrderScreen go={go} qty={qty} setQty={setQty} extras={extras} setExtras={setExtras} time={time} setTime={setTime} notes={notes} setNotes={setNotes} photos={photos} setPhotos={setPhotos} setHandover={setHandover} privacy={privacy} setPrivacy={setPrivacy} />}
         {screen === "payment" && <PaymentScreen go={go} onPaid={placeOrder} />}
         {screen === "done" && <DoneScreen go={go} qty={qty} time={time} payMethod={payMethod} orderId={orderId} />}
         {screen === "track" && <TrackScreen go={go} orderId={orderId} />}
         {screen === "map" && <MapScreen go={go} />}
         {screen === "offers" && <OffersScreen />}
-        {screen === "orders" && <OrdersScreen go={go} orderId={orderId} />}
+        {screen === "orders" && <OrdersScreen go={go} orderId={orderId} myIds={myIds} />}
         {screen === "account" && <AccountScreen go={go} openInvoice={() => setInvoice(true)} />}
         {screen === "delivery" && <DeliveryScreen go={go} />}
       </div>
@@ -178,8 +190,9 @@ function HomeScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string
     <div className="px-5 pt-8">
       <div className="flex items-start justify-between">
         <Logo />
-        <button className="grid h-11 w-11 place-items-center rounded-full border border-border bg-card" aria-label="الإشعارات">
+        <button className="relative grid h-11 w-11 place-items-center rounded-full border border-border bg-card" aria-label="الإشعارات" onClick={() => live && go("track")}>
           <Bell className="h-5 w-5" />
+          {live && !live.received ? <span className="absolute right-1 top-1 h-3 w-3 rounded-full bg-accent" /> : null}
         </button>
       </div>
       <p className="mt-4 text-sm text-muted-foreground">مرحباً بك</p>
@@ -205,6 +218,13 @@ function HomeScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string
         ))}
       </div>
 
+      {live && live.kind === "drop" && live.step === 3 && !live.received ? (
+        <div className="mt-4 rounded-2xl border-2 border-success bg-card p-5 text-right">
+          <p className="flex items-center gap-2 font-display text-xl font-bold"><Check className="h-6 w-6 text-success" /> طلبك على بابك</p>
+          <p className="mt-1 text-sm text-muted-foreground">طلب {live.id} · {live.handover.split("تسليم:")[1]?.trim() || live.handover}</p>
+          <GoldBtn onClick={() => void confirmReceived(live.id)} className="mt-4">استلام</GoldBtn>
+        </div>
+      ) : null}
       {live && !(live.kind === "drop" && live.step === 3) ? (
         <button onClick={() => go("track")} className="mt-4 w-full rounded-2xl border border-border bg-card p-5 text-right">
           <div className="flex justify-between font-bold">
@@ -243,15 +263,17 @@ function BottomNav({ screen, go }: { screen: Screen; go: (s: Screen) => void }) 
 }
 
 /* ---------- new order ---------- */
-function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime, notes = "", setNotes = () => {}, photos = [], setPhotos = () => {}, setHandover = () => {} }: {
+function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime, notes = "", setNotes = () => {}, photos = [], setPhotos = () => {}, setHandover = () => {}, privacy: props_privacy, setPrivacy: props_setPrivacy }: {
   go: (s: Screen) => void; qty: Record<string, number>; setQty: (q: Record<string, number>) => void;
   extras: string[]; setExtras: (e: string[]) => void;
   time: string; setTime: (t: string) => void;
   notes?: string; setNotes?: (n: string) => void;
   photos?: File[]; setPhotos?: (f: File[]) => void; setHandover?: (h: string) => void;
+  privacy?: boolean; setPrivacy?: (b: boolean) => void;
 }) {
   const [door, setDoor] = useState(true);
-  const [privacy, setPrivacy] = useState(true);
+  const [localPrivacy, setLocalPrivacy] = useState(true);
+  const privacy = props_privacy ?? localPrivacy; const setPrivacy = props_setPrivacy ?? setLocalPrivacy;
   const [pick, setPick] = useState(0);
   const [drop, setDrop] = useState(0);
   const [optSheet, setOptSheet] = useState<null | "pick" | "drop">(null);
@@ -657,27 +679,44 @@ function InvoiceModal({ close }: { close: () => void }) {
 }
 
 /* ---------- tabs ---------- */
-function OrdersScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string | null; openInvoice?: () => void }) {
+function OrdersScreen({ go, orderId, myIds = [] }: { go: (s: Screen) => void; orderId?: string | null; myIds?: string[]; openInvoice?: () => void }) {
   const live = useOrder(orderId ?? null);
+  const mine = useMyOrders(myIds);
+  const past = mine.filter((o) => o.id !== live?.id || (o.kind === "drop" && o.step === 3));
+  const current = live && !(live.kind === "drop" && live.step === 3) ? live : null;
   return (
     <div className="px-5 pt-8">
       <h1 className="font-display text-3xl font-bold">طلباتي</h1>
-      {live ? (
+      {current ? (
         <button onClick={() => go("track")} className="mt-5 flex w-full items-center gap-3 rounded-2xl border-2 border-accent bg-card p-4 text-right">
           <span className="grid h-11 w-11 place-items-center rounded-full bg-primary"><Truck className="h-5 w-5 text-accent" /></span>
           <span className="flex-1">
             <span className="block font-bold">تتبع الطلب</span>
-            <span className="block text-xs text-muted-foreground">طلب {live.id} · {stepLabel(live)} · {live.total} ر.س</span>
+            <span className="block text-xs text-muted-foreground">طلب {current.id} · {stepLabel(current)} · {current.total} ر.س</span>
           </span>
           <ChevronLeft className="h-5 w-5" />
         </button>
-      ) : (
+      ) : null}
+      {past.length ? (
+        <>
+          <h2 className="mt-7 font-bold">الطلبات السابقة</h2>
+          <div className="mt-3 space-y-3">
+            {past.map((o) => (
+              <div key={o.id} className="rounded-2xl border border-border bg-card p-4">
+                <div className="flex justify-between font-bold"><span>طلب {o.id}</span><span>{o.total} ر.س</span></div>
+                <p className="mt-1 text-xs text-muted-foreground">{o.pieces} قطع · {o.time} · {o.received ? "تم الاستلام منك" : o.kind === "drop" && o.step === 3 ? "تم التسليم" : stepLabel(o)}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {!current && !past.length ? (
         <div className="mt-16 flex flex-col items-center gap-3 text-center">
           <span className="grid h-16 w-16 place-items-center rounded-full bg-secondary"><Receipt className="h-8 w-8 text-muted-foreground" /></span>
           <p className="font-display text-lg">لا توجد طلبات بعد</p>
           <GoldBtn onClick={() => go("order")}>اطلب استلام الآن</GoldBtn>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

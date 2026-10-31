@@ -67,6 +67,7 @@ function OrderCard({ o, onPhotos }: { o: Order; onPhotos: (u: string[]) => void 
         <span className="flex items-center gap-1 text-sm text-muted-foreground"><Shirt className="size-4" />{o.pieces} قطع · {o.total} ر.س</span>
       </div>
       <p className="text-sm text-muted-foreground">{o.customer} · {o.handover}</p>
+      <p className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-bold ${o.privacy ? "bg-success text-success-foreground" : "bg-secondary text-muted-foreground"}`}>كيس الخصوصية: {o.privacy ? "مفعّل" : "غير مفعّل"}</p>
       <div className="mt-3 rounded-xl border border-accent p-3">
         <p className="flex items-center gap-1 text-sm font-bold"><StickyNote className="size-4 text-accent" />ملاحظات العميل</p>
         <p className="mt-1 text-sm">{o.notes || "لا توجد ملاحظات"}</p>
