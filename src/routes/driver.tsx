@@ -106,9 +106,9 @@ function DriverApp() {
           </button>
         </div>
         <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-          <Stat n={tasks.filter((t) => t.kind === "pickup" && t.step < 3).length} l="استلام" />
-          <Stat n={tasks.filter((t) => t.kind === "drop" && t.step < 3).length} l="تسليم" />
-          <Stat n={tasks.filter((t) => t.step === 3).length} l="منجزة" />
+          <Stat n={all.filter((t) => t.kind === "pickup" && t.step < 3).length} l="استلام" />
+          <Stat n={all.filter((t) => t.kind === "drop" && t.step < 3).length} l="تسليم" />
+          <Stat n={all.filter((t) => t.step === 3).length} l="منجزة" />
         </div>
       </header>
 
@@ -116,9 +116,9 @@ function DriverApp() {
         {open ? (
           <TaskDetail t={open} back={() => setOpenId(null)} advance={() => advance(open.id)} />
         ) : tab === "tasks" ? (
-          <TaskList tasks={tasks} online={online} onOpen={setOpenId} />
+          <TaskList tasks={all} online={online} onOpen={setOpenId} />
         ) : tab === "earn" ? (
-          <Earnings tasks={tasks} />
+          <Earnings tasks={all} />
         ) : (
           <Profile onReset={resetDay} />
         )}
