@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
-import { createOrder, useOrder, PICKUP_STEPS } from "@/lib/orders";
+import { useEffect, useState, type ReactNode } from "react";
+import { createOrder, useOrder, PICKUP_STEPS, DROP_STEPS, stepLabel, uploadPhotos } from "@/lib/orders";
 import {
   Bell, Shirt, Flame, Droplet, Grid3x3, Home, ShoppingBag, Star, User, ChevronRight, ChevronLeft,
   Plus, Minus, X, Search, Banknote, CreditCard, Check, Lock, Phone, MessageSquare, MapPin, Users,
-  Truck, Receipt, QrCode,
+  Truck, Receipt, QrCode, Camera,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -49,6 +49,7 @@ const DROP_OPTS: [string, string][] = [
   ["تعليقة الباب", "نعلّق الكيس على باب بيتك"],
   ["يد بيد", "تستلم الطلب مباشرة"],
   ["موقع مختلف عن المحفوظ", "مثل العمل"],
+  ["الاستلام من المغسلة", "تمرّ وتستلم طلبك بنفسك من المغسلة"],
 ];
 
 const optionAt = (opts: [string, string][], i: number): [string, string] => opts[i] ?? opts[0] ?? ["", ""];
@@ -61,13 +62,21 @@ function App() {
   const [time, setTime] = useState("اليوم مساءً");
   const [payMethod, setPayMethod] = useState("كاش عند الاستلام");
   const [notes, setNotes] = useState("");
-  const [orderId, setOrderId] = useState<string | null>(null);
+  const [orderId, setOrderIdState] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [handover, setHandover] = useState("استلام: تعليقة الباب · تسليم: تعليقة الباب");
+  useEffect(() => { setOrderIdState(localStorage.getItem("naseg-last-order")); }, []);
+  const setOrderId = (id: string | null) => {
+    setOrderIdState(id);
+    if (id) localStorage.setItem("naseg-last-order", id);
+  };
   const placeOrder = (m: string) => {
     setPayMethod(m);
     const pieces = ALL.reduce((s, i) => s + (qty[i.name] || 0), 0);
     const total = ALL.reduce((s, i) => s + (qty[i.name] || 0) * i.price, 0);
-    createOrder({ time, pieces, total, paid: m !== "كاش عند الاستلام", handover: "تعليقة الباب", notes: notes.trim() })
-      .then(setOrderId)
+    uploadPhotos(photos)
+      .then((paths) => createOrder({ time, pieces, total, paid: m !== "كاش عند الاستلام", handover, notes: notes.trim(), photos: paths }))
+      .then((id) => { setOrderId(id); setPhotos([]); setNotes(""); })
       .catch(() => setOrderId(null));
   };
   const go = (s: Screen) => {
@@ -79,8 +88,8 @@ function App() {
   return (
     <div dir="rtl" className="mx-auto min-h-screen max-w-md bg-background font-sans text-foreground">
       <div className={tab ? "pb-24" : ""}>
-        {screen === "home" && <HomeScreen go={go} />}
-        {screen === "order" && <OrderScreen go={go} qty={qty} setQty={setQty} extras={extras} setExtras={setExtras} time={time} setTime={setTime} notes={notes} setNotes={setNotes} />}
+        {screen === "home" && <HomeScreen go={go} orderId={orderId} />}
+        {screen === "order" && <OrderScreen go={go} qty={qty} setQty={setQty} extras={extras} setExtras={setExtras} time={time} setTime={setTime} notes={notes} setNotes={setNotes} photos={photos} setPhotos={setPhotos} setHandover={setHandover} />}
         {screen === "payment" && <PaymentScreen go={go} onPaid={placeOrder} />}
         {screen === "done" && <DoneScreen go={go} qty={qty} time={time} payMethod={payMethod} orderId={orderId} />}
         {screen === "track" && <TrackScreen go={go} orderId={orderId} />}
@@ -157,7 +166,8 @@ function Toggle({ on, set }: { on: boolean; set: (b: boolean) => void }) {
 }
 
 /* ---------- home ---------- */
-function HomeScreen({ go }: { go: (s: Screen) => void }) {
+function HomeScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string | null }) {
+  const live = useOrder(orderId ?? null);
   const services = [
     { t: "غسيل وكي", i: Shirt },
     { t: "كي فقط", i: Flame },
@@ -195,15 +205,17 @@ function HomeScreen({ go }: { go: (s: Screen) => void }) {
         ))}
       </div>
 
-      <button onClick={() => go("track")} className="mt-4 w-full rounded-2xl border border-border bg-card p-5 text-right">
-        <div className="flex justify-between font-bold">
-          <span>طلبك الحالي</span>
-          <span className="text-accent">قيد الكي</span>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
-          <div className="h-full w-[70%] rounded-full bg-accent" />
-        </div>
-      </button>
+      {live && !(live.kind === "drop" && live.step === 3) ? (
+        <button onClick={() => go("track")} className="mt-4 w-full rounded-2xl border border-border bg-card p-5 text-right">
+          <div className="flex justify-between font-bold">
+            <span>طلبك الحالي · {live.id}</span>
+            <span className="text-accent">{live.kind === "pickup" && live.step === 3 ? "في المغسلة" : stepLabel(live)}</span>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
+            <div className="h-full rounded-full bg-accent" style={{ width: `${((live.kind === "drop" ? 4 : 0) + live.step + 1) * 12.5}%` }} />
+          </div>
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -231,17 +243,22 @@ function BottomNav({ screen, go }: { screen: Screen; go: (s: Screen) => void }) 
 }
 
 /* ---------- new order ---------- */
-function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime, notes = "", setNotes = () => {} }: {
+function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime, notes = "", setNotes = () => {}, photos = [], setPhotos = () => {}, setHandover = () => {} }: {
   go: (s: Screen) => void; qty: Record<string, number>; setQty: (q: Record<string, number>) => void;
   extras: string[]; setExtras: (e: string[]) => void;
   time: string; setTime: (t: string) => void;
   notes?: string; setNotes?: (n: string) => void;
+  photos?: File[]; setPhotos?: (f: File[]) => void; setHandover?: (h: string) => void;
 }) {
   const [door, setDoor] = useState(true);
   const [privacy, setPrivacy] = useState(true);
   const [pick, setPick] = useState(0);
   const [drop, setDrop] = useState(0);
   const [optSheet, setOptSheet] = useState<null | "pick" | "drop">(null);
+  useEffect(() => {
+    setHandover(`استلام: ${optionAt(PICKUP_OPTS, pick)[0]} · تسليم: ${optionAt(DROP_OPTS, drop)[0]}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pick, drop]);
   const [sheet, setSheet] = useState(false);
   const list = [...MAIN, ...OTHER.filter((o) => extras.includes(o.name))];
   const total = ALL.reduce((s, i) => s + (qty[i.name] || 0) * i.price, 0);
@@ -296,6 +313,26 @@ function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime, notes 
           rows={3}
           className="w-full rounded-2xl border border-border bg-card p-4 text-sm outline-none focus:border-primary"
         />
+        <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-2xl border-2 border-dashed border-accent p-4">
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-accent text-accent-foreground"><Camera className="h-5 w-5" /></span>
+          <span className="flex-1">
+            <span className="block font-bold">أضف صورة</span>
+            <span className="text-xs text-muted-foreground">مثل بقعة أو قطعة تحتاج عناية خاصة</span>
+          </span>
+          <input type="file" accept="image/*" multiple hidden aria-label="أضف صورة"
+            onChange={(e) => setPhotos([...photos, ...Array.from(e.target.files ?? [])].slice(0, 6))} />
+        </label>
+        {photos.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {photos.map((f, i) => (
+              <div key={i} className="relative">
+                <img src={URL.createObjectURL(f)} alt={`صورة ${i + 1}`} className="h-16 w-16 rounded-xl object-cover" />
+                <button onClick={() => setPhotos(photos.filter((_, j) => j !== i))} aria-label="حذف الصورة"
+                  className="absolute -left-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground"><X className="h-3 w-3" /></button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="mt-5 space-y-3">
           <div className="flex items-center gap-3 rounded-2xl bg-primary p-5 text-primary-foreground">
@@ -498,41 +535,39 @@ function DoneScreen({ go, qty, time, payMethod, orderId }: {
 /* ---------- tracking ---------- */
 function TrackScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string | null }) {
   const live = useOrder(orderId ?? null);
-  const steps = [["تم الاستلام من الباب", 1], ["الغسيل", 1], ["الكي والتغليف", 1], ["في الطريق إليك", 0.5], ["التسليم على بابك", 0]] as const;
+  const steps = ["استلام المندوب لطلبك", "الغسيل والكي في المغسلة", "جاهز للتسليم", "في الطريق إليك", "تم التسليم"];
+  // 0..4 = index of current stage; done stages are below it.
+  const stage = !live ? -1 : live.kind === "pickup" ? (live.step < 3 ? 0 : 1) : live.step === 0 ? 2 : live.step < 3 ? 3 : 5;
   return (
     <div className="pb-8">
-      <Header title="تتبع الطلب" back={() => go("home")} extra={<span className="text-sm text-muted-foreground">رقم {live?.id ?? "1042"}</span>} />
+      <Header title="تتبع الطلب" back={() => go("home")} extra={live ? <span className="text-sm text-muted-foreground">رقم {live.id}</span> : undefined} />
       <div className="px-5">
-        {live && (
-          <div className="mb-4 rounded-2xl border-2 border-accent bg-card p-4">
-            <p className="text-xs text-muted-foreground">حالة المندوب الآن (مباشر)</p>
-            <p className="mt-1 font-display text-2xl font-bold">{PICKUP_STEPS[live.step]}</p>
-            <div className="mt-3 flex gap-1.5">
-              {PICKUP_STEPS.map((st, i) => <span key={st} className={`h-1.5 flex-1 rounded-full ${i <= live.step ? "bg-accent" : "bg-border"}`} />)}
+        {!live ? (
+          <div className="mt-16 flex flex-col items-center gap-3 text-center">
+            <p className="font-display text-lg">لا يوجد طلب حالي</p>
+            <GoldBtn onClick={() => go("order")}>اطلب استلام الآن</GoldBtn>
+          </div>
+        ) : (
+          <>
+            <div className="rounded-3xl bg-primary p-6 text-primary-foreground">
+              <span className="text-sm text-accent">الحالة الآن (مباشر)</span>
+              <p className="mt-2 font-display text-3xl font-bold">{steps[Math.min(stage, 4)]}</p>
+              <p className="mt-1 text-sm opacity-80">{stepLabel(live)} · {live.handover}</p>
+              <div className="mt-5 h-1.5 rounded-full bg-primary-foreground/20"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, (stage + 1) * 20)}%` }} /></div>
             </div>
-          </div>
+            <ol className="mt-6 space-y-0">
+              {steps.map((t, i) => (
+                <li key={t} className="flex items-start gap-4">
+                  <div className="flex flex-col items-center">
+                    <span className={`grid h-8 w-8 place-items-center rounded-full ${i < stage ? "bg-accent" : i === stage ? "border-2 border-accent" : "border-2 border-border"}`}>{i < stage && <Check className="h-4 w-4" />}</span>
+                    {i < steps.length - 1 && <span className={`h-8 w-0.5 ${i < stage ? "bg-accent" : "bg-border"}`} />}
+                  </div>
+                  <span className={`pt-1 ${i <= stage ? "font-bold" : "text-muted-foreground"}`}>{t}</span>
+                </li>
+              ))}
+            </ol>
+          </>
         )}
-        <div className="rounded-3xl bg-primary p-6 text-primary-foreground">
-          <div className="flex justify-between text-sm">
-            <span className="text-accent">الحالة الآن</span>
-            <span className="text-left"><b>عميل ناصع</b></span>
-          </div>
-          <p className="mt-2 font-display text-4xl font-bold">في الطريق إليك</p>
-          <p className="mt-1 text-sm opacity-80">الوصول المتوقع بعد ٢٠ دقيقة</p>
-          <span className="mt-4 inline-flex items-center gap-2 rounded-full bg-primary-foreground/10 px-4 py-2 text-sm"><Users className="h-4 w-4 text-accent" /> ٣ عملاء قبلك على مسار المندوب</span>
-          <div className="mt-5 h-1.5 rounded-full bg-primary-foreground/20"><div className="h-full w-4/5 rounded-full bg-accent" /></div>
-        </div>
-        <ol className="mt-6 space-y-0">
-          {steps.map(([t, s], i) => (
-            <li key={t} className="flex items-start gap-4">
-              <div className="flex flex-col items-center">
-                <span className={`grid h-8 w-8 place-items-center rounded-full ${s === 1 ? "bg-accent" : s ? "border-2 border-accent" : "border-2 border-border"}`}>{s === 1 && <Check className="h-4 w-4" />}</span>
-                {i < steps.length - 1 && <span className={`h-8 w-0.5 ${s === 1 ? "bg-accent" : "bg-border"}`} />}
-              </div>
-              <span className={`pt-1 ${s ? "font-bold" : "text-muted-foreground"}`}>{t}</span>
-            </li>
-          ))}
-        </ol>
         <DriverCard />
         <button onClick={() => go("map")} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border-2 border-accent bg-primary py-4 font-bold text-primary-foreground">
           <MapPin className="h-5 w-5 text-accent" /> تتبع المندوب على الخريطة
@@ -632,7 +667,7 @@ function OrdersScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: stri
           <span className="grid h-11 w-11 place-items-center rounded-full bg-primary"><Truck className="h-5 w-5 text-accent" /></span>
           <span className="flex-1">
             <span className="block font-bold">تتبع الطلب</span>
-            <span className="block text-xs text-muted-foreground">طلب {live.id} · {PICKUP_STEPS[live.step]} · {live.total} ر.س</span>
+            <span className="block text-xs text-muted-foreground">طلب {live.id} · {stepLabel(live)} · {live.total} ر.س</span>
           </span>
           <ChevronLeft className="h-5 w-5" />
         </button>

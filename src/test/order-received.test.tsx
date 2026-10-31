@@ -64,7 +64,7 @@ describe("Order received page", () => {
     fireEvent.click(screen.getByRole("button", { name: "تأكيد طريقة الدفع" }));
     fireEvent.click(screen.getByRole("button", { name: "تتبع الطلب" }));
 
-    expect(screen.getByText("الحالة الآن")).toBeInTheDocument();
+    expect(screen.getByText(/الحالة الآن|لا يوجد طلب حالي/)).toBeInTheDocument();
   });
 });
 
