@@ -190,8 +190,9 @@ function HomeScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string
     <div className="px-5 pt-8">
       <div className="flex items-start justify-between">
         <Logo />
-        <button className="grid h-11 w-11 place-items-center rounded-full border border-border bg-card" aria-label="الإشعارات">
+        <button className="grid h-11 w-11 place-items-center rounded-full border border-border bg-card" aria-label="الإشعارات" onClick={() => live && go("track")}>
           <Bell className="h-5 w-5" />
+          {live && !live.received ? <span className="absolute -mt-6 -mr-6 h-3 w-3 rounded-full bg-accent" /> : null}
         </button>
       </div>
       <p className="mt-4 text-sm text-muted-foreground">مرحباً بك</p>
@@ -217,6 +218,13 @@ function HomeScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string
         ))}
       </div>
 
+      {live && live.kind === "drop" && live.step === 3 && !live.received ? (
+        <div className="mt-4 rounded-2xl border-2 border-success bg-card p-5 text-right">
+          <p className="flex items-center gap-2 font-display text-xl font-bold"><Check className="h-6 w-6 text-success" /> طلبك على بابك</p>
+          <p className="mt-1 text-sm text-muted-foreground">طلب {live.id} · {live.handover.split("تسليم:")[1]?.trim() || live.handover}</p>
+          <GoldBtn onClick={() => void confirmReceived(live.id)} className="mt-4">استلام</GoldBtn>
+        </div>
+      ) : null}
       {live && !(live.kind === "drop" && live.step === 3) ? (
         <button onClick={() => go("track")} className="mt-4 w-full rounded-2xl border border-border bg-card p-5 text-right">
           <div className="flex justify-between font-bold">
@@ -255,7 +263,7 @@ function BottomNav({ screen, go }: { screen: Screen; go: (s: Screen) => void }) 
 }
 
 /* ---------- new order ---------- */
-function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime, notes = "", setNotes = () => {}, photos = [], setPhotos = () => {}, setHandover = () => {} }: {
+function OrderScreen({ go, qty, setQty, extras, setExtras, time, setTime, notes = "", setNotes = () => {}, photos = [], setPhotos = () => {}, setHandover = () => {}, privacy: props_privacy, setPrivacy: props_setPrivacy }: {
   go: (s: Screen) => void; qty: Record<string, number>; setQty: (q: Record<string, number>) => void;
   extras: string[]; setExtras: (e: string[]) => void;
   time: string; setTime: (t: string) => void;
@@ -671,27 +679,44 @@ function InvoiceModal({ close }: { close: () => void }) {
 }
 
 /* ---------- tabs ---------- */
-function OrdersScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string | null; openInvoice?: () => void }) {
+function OrdersScreen({ go, orderId, myIds = [] }: { go: (s: Screen) => void; orderId?: string | null; myIds?: string[]; openInvoice?: () => void }) {
   const live = useOrder(orderId ?? null);
+  const mine = useMyOrders(myIds);
+  const past = mine.filter((o) => o.id !== live?.id || (o.kind === "drop" && o.step === 3));
+  const current = live && !(live.kind === "drop" && live.step === 3) ? live : null;
   return (
     <div className="px-5 pt-8">
       <h1 className="font-display text-3xl font-bold">طلباتي</h1>
-      {live ? (
+      {current ? (
         <button onClick={() => go("track")} className="mt-5 flex w-full items-center gap-3 rounded-2xl border-2 border-accent bg-card p-4 text-right">
           <span className="grid h-11 w-11 place-items-center rounded-full bg-primary"><Truck className="h-5 w-5 text-accent" /></span>
           <span className="flex-1">
             <span className="block font-bold">تتبع الطلب</span>
-            <span className="block text-xs text-muted-foreground">طلب {live.id} · {stepLabel(live)} · {live.total} ر.س</span>
+            <span className="block text-xs text-muted-foreground">طلب {current.id} · {stepLabel(current)} · {current.total} ر.س</span>
           </span>
           <ChevronLeft className="h-5 w-5" />
         </button>
-      ) : (
+      ) : null}
+      {past.length ? (
+        <>
+          <h2 className="mt-7 font-bold">الطلبات السابقة</h2>
+          <div className="mt-3 space-y-3">
+            {past.map((o) => (
+              <div key={o.id} className="rounded-2xl border border-border bg-card p-4">
+                <div className="flex justify-between font-bold"><span>طلب {o.id}</span><span>{o.total} ر.س</span></div>
+                <p className="mt-1 text-xs text-muted-foreground">{o.pieces} قطع · {o.time} · {o.received ? "تم الاستلام منك" : o.kind === "drop" && o.step === 3 ? "تم التسليم" : stepLabel(o)}</p>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {!current && !past.length ? (
         <div className="mt-16 flex flex-col items-center gap-3 text-center">
           <span className="grid h-16 w-16 place-items-center rounded-full bg-secondary"><Receipt className="h-8 w-8 text-muted-foreground" /></span>
           <p className="font-display text-lg">لا توجد طلبات بعد</p>
           <GoldBtn onClick={() => go("order")}>اطلب استلام الآن</GoldBtn>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

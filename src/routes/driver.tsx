@@ -1,3 +1,4 @@
+import { splitHandover } from "@/lib/orders";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { useOrders, advanceOrder } from "@/lib/orders";
@@ -24,7 +25,7 @@ type Kind = "pickup" | "drop";
 type Task = {
   id: string; kind: Kind; customer: string; phone: string; area: string;
   time: string; pieces: number; handover: string; total: number; paid: boolean; step: number;
-  notes?: string;
+  notes?: string; privacy?: boolean;
 };
 
 const STEPS: Record<Kind, string[]> = {
@@ -177,7 +178,9 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
       <div className="rounded-2xl bg-card p-4 shadow-soft">
         <div className="flex justify-between text-sm"><span className="text-muted-foreground">الوقت</span><span>{t.time}</span></div>
         <div className="mt-2 flex justify-between text-sm"><span className="text-muted-foreground">عدد القطع</span><span>{t.pieces}</span></div>
-        <div className="mt-2 flex justify-between text-sm"><span className="text-muted-foreground">طريقة {t.kind === "pickup" ? "الاستلام" : "التسليم"}</span><span>{t.handover}</span></div>
+        <div className="mt-2 flex justify-between text-sm"><span className="text-muted-foreground">طريقة الاستلام</span><b className={t.kind === "pickup" ? "text-accent" : ""}>{splitHandover(t.handover).pick}</b></div>
+        <div className="mt-2 flex justify-between text-sm"><span className="text-muted-foreground">طريقة التسليم</span><b className={t.kind === "drop" ? "text-accent" : ""}>{splitHandover(t.handover).drop}</b></div>
+        <div className="mt-2 flex justify-between text-sm"><span className="text-muted-foreground">كيس الخصوصية</span><span>{t.privacy ? "مفعّل" : "غير مفعّل"}</span></div>
         <div className="mt-2 flex justify-between text-sm"><span className="text-muted-foreground">المبلغ</span>
           <span>{t.total} ر.س · {t.paid ? <b className="text-success">مدفوع</b> : <b className="text-destructive">تحصيل نقدي</b>}</span></div>
       </div>
