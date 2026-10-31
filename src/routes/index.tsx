@@ -543,9 +543,9 @@ function TrackScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: strin
         {live && (
           <div className="mb-4 rounded-2xl border-2 border-accent bg-card p-4">
             <p className="text-xs text-muted-foreground">حالة المندوب الآن (مباشر)</p>
-            <p className="mt-1 font-display text-2xl font-bold">{PICKUP_STEPS[live.step]}</p>
+            <p className="mt-1 font-display text-2xl font-bold">{live.kind === "pickup" && live.step === 3 ? "طلبك في المغسلة" : stepLabel(live)}</p>
             <div className="mt-3 flex gap-1.5">
-              {PICKUP_STEPS.map((st, i) => <span key={st} className={`h-1.5 flex-1 rounded-full ${i <= live.step ? "bg-accent" : "bg-border"}`} />)}
+              {(live.kind === "drop" ? DROP_STEPS : PICKUP_STEPS).map((st, i) => <span key={st} className={`h-1.5 flex-1 rounded-full ${i <= live.step ? "bg-accent" : "bg-border"}`} />)}
             </div>
           </div>
         )}
@@ -669,7 +669,7 @@ function OrdersScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: stri
           <span className="grid h-11 w-11 place-items-center rounded-full bg-primary"><Truck className="h-5 w-5 text-accent" /></span>
           <span className="flex-1">
             <span className="block font-bold">تتبع الطلب</span>
-            <span className="block text-xs text-muted-foreground">طلب {live.id} · {PICKUP_STEPS[live.step]} · {live.total} ر.س</span>
+            <span className="block text-xs text-muted-foreground">طلب {live.id} · {stepLabel(live)} · {live.total} ر.س</span>
           </span>
           <ChevronLeft className="h-5 w-5" />
         </button>
