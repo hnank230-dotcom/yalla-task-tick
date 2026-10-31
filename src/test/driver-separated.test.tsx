@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import { render, screen, fireEvent, beforeEach } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, beforeEach } from "vitest";
 
 import { Route } from "@/routes/driver";
 
