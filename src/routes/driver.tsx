@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useOrders, advanceOrder } from "@/lib/orders";
 import {
   MapPin, Phone, MessageCircle, Package, Truck, CheckCircle2, ChevronLeft,
   Wallet, User, ListChecks, Navigation, Clock, Power, RotateCcw,
@@ -61,7 +62,10 @@ function DriverApp() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
   const [ready, setReady] = useState(false);
-  const open = tasks.find((t) => t.id === openId);
+  const live = useOrders();
+  const liveIds = new Set(live.map((o) => o.id));
+  const all = [...live, ...tasks.filter((t) => !liveIds.has(t.id))];
+  const open = all.find((t) => t.id === openId);
 
   // Read the driver's own saved day only after mount, so the server render and
   // the first client render agree.
@@ -76,8 +80,11 @@ function DriverApp() {
     if (ready) localStorage.setItem(STORE_KEY, JSON.stringify({ tasks, online }));
   }, [tasks, online, ready]);
 
-  const advance = (id: string) =>
+  const advance = (id: string) => {
+    const o = live.find((x) => x.id === id);
+    if (o) return void advanceOrder(o);
     setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, step: Math.min(t.step + 1, 3), paid: t.step === 2 ? true : t.paid } : t)));
+  };
 
   const resetDay = () => { setTasks(SEED); setOpenId(null); };
 

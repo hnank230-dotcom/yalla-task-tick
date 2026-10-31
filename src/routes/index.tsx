@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
+import { createOrder, useOrder, PICKUP_STEPS } from "@/lib/orders";
 import {
   Bell, Shirt, Flame, Droplet, Grid3x3, Home, ShoppingBag, Star, User, ChevronRight, ChevronLeft,
   Plus, Minus, X, Search, Banknote, CreditCard, Check, Lock, Phone, MessageSquare, MapPin, Users,
@@ -59,6 +60,15 @@ function App() {
   const [invoice, setInvoice] = useState(false);
   const [time, setTime] = useState("اليوم مساءً");
   const [payMethod, setPayMethod] = useState("كاش عند الاستلام");
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const placeOrder = (m: string) => {
+    setPayMethod(m);
+    const pieces = ALL.reduce((s, i) => s + (qty[i.name] || 0), 0);
+    const total = ALL.reduce((s, i) => s + (qty[i.name] || 0) * i.price, 0);
+    createOrder({ time, pieces, total, paid: m !== "كاش عند الاستلام", handover: "تعليقة الباب" })
+      .then(setOrderId)
+      .catch(() => setOrderId(null));
+  };
   const go = (s: Screen) => {
     setScreen(s);
     window.scrollTo(0, 0);
@@ -70,9 +80,9 @@ function App() {
       <div className={tab ? "pb-24" : ""}>
         {screen === "home" && <HomeScreen go={go} />}
         {screen === "order" && <OrderScreen go={go} qty={qty} setQty={setQty} extras={extras} setExtras={setExtras} time={time} setTime={setTime} />}
-        {screen === "payment" && <PaymentScreen go={go} onPaid={setPayMethod} />}
-        {screen === "done" && <DoneScreen go={go} qty={qty} time={time} payMethod={payMethod} />}
-        {screen === "track" && <TrackScreen go={go} />}
+        {screen === "payment" && <PaymentScreen go={go} onPaid={placeOrder} />}
+        {screen === "done" && <DoneScreen go={go} qty={qty} time={time} payMethod={payMethod} orderId={orderId} />}
+        {screen === "track" && <TrackScreen go={go} orderId={orderId} />}
         {screen === "map" && <MapScreen go={go} />}
         {screen === "offers" && <OffersScreen />}
         {screen === "orders" && <OrdersScreen go={go} openInvoice={() => setInvoice(true)} />}
@@ -441,8 +451,8 @@ function PaymentScreen({ go, onPaid }: { go: (s: Screen) => void; onPaid: (m: st
 }
 
 /* ---------- order received ---------- */
-function DoneScreen({ go, qty, time, payMethod }: {
-  go: (s: Screen) => void; qty: Record<string, number>; time: string; payMethod: string;
+function DoneScreen({ go, qty, time, payMethod, orderId }: {
+  go: (s: Screen) => void; qty: Record<string, number>; time: string; payMethod: string; orderId?: string | null;
 }) {
   const pieces = ALL.reduce((s, i) => s + (qty[i.name] || 0), 0);
   const total = ALL.reduce((s, i) => s + (qty[i.name] || 0) * i.price, 0);
@@ -455,7 +465,7 @@ function DoneScreen({ go, qty, time, payMethod }: {
       <h1 className="mt-6 font-display text-4xl font-bold">تم استلام طلبك</h1>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
         استلم مندوبنا ملابسك من بابك وبدأنا الغسيل والكي
-        <br /> رقم طلبك <b className="text-foreground">1042</b>
+        <br /> رقم طلبك <b className="text-foreground">{orderId ?? "1042"}</b>
       </p>
       <div className="mt-8 space-y-3 rounded-3xl bg-primary p-5 text-right text-primary-foreground">
         {rows.map(([k, v]) => (
@@ -474,12 +484,22 @@ function DoneScreen({ go, qty, time, payMethod }: {
 }
 
 /* ---------- tracking ---------- */
-function TrackScreen({ go }: { go: (s: Screen) => void }) {
+function TrackScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string | null }) {
+  const live = useOrder(orderId ?? null);
   const steps = [["تم الاستلام من الباب", 1], ["الغسيل", 1], ["الكي والتغليف", 1], ["في الطريق إليك", 0.5], ["التسليم على بابك", 0]] as const;
   return (
     <div className="pb-8">
-      <Header title="تتبع الطلب" back={() => go("home")} extra={<span className="text-sm text-muted-foreground">رقم 1042</span>} />
+      <Header title="تتبع الطلب" back={() => go("home")} extra={<span className="text-sm text-muted-foreground">رقم {live?.id ?? "1042"}</span>} />
       <div className="px-5">
+        {live && (
+          <div className="mb-4 rounded-2xl border-2 border-accent bg-card p-4">
+            <p className="text-xs text-muted-foreground">حالة المندوب الآن (مباشر)</p>
+            <p className="mt-1 font-display text-2xl font-bold">{PICKUP_STEPS[live.step]}</p>
+            <div className="mt-3 flex gap-1.5">
+              {PICKUP_STEPS.map((st, i) => <span key={st} className={`h-1.5 flex-1 rounded-full ${i <= live.step ? "bg-accent" : "bg-border"}`} />)}
+            </div>
+          </div>
+        )}
         <div className="rounded-3xl bg-primary p-6 text-primary-foreground">
           <div className="flex justify-between text-sm">
             <span className="text-accent">الحالة الآن</span>
