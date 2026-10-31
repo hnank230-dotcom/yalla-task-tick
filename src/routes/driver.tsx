@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-  MapPin, Phone, MessageCircle, Package, Truck, CheckCircle2, ChevronLeft,
+  MapPin, Phone, MessageCircle, Package, Truck, CheckCircle2, ChevronLeft, ChevronRight,
   Wallet, User, ListChecks, Navigation, Clock, Power,
 } from "lucide-react";
 
@@ -54,6 +54,9 @@ function DriverApp() {
           <div>
             <p className="text-sm opacity-80">مرحبًا، خالد</p>
             <h1 className="font-display text-2xl">ناصع <span className="text-accent">للمندوب</span></h1>
+            <Link to="/" className="mt-1 inline-flex items-center gap-1 text-xs opacity-75">
+              <ChevronRight className="size-3.5" /> العودة لتطبيق العميل
+            </Link>
           </div>
           <button
             onClick={() => setOnline(!online)}
