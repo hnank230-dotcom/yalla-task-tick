@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useOrders, advanceOrder } from "@/lib/orders";
 import {
   MapPin, Phone, MessageCircle, Package, Truck, CheckCircle2, ChevronLeft,
-  History, BookOpen, StickyNote, User, ListChecks, Navigation, Clock, Power, Inbox,
+  History, BookOpen, StickyNote, User, ListChecks, Navigation, Clock, Power, Inbox, ScanLine,
 } from "lucide-react";
 
 export const Route = createFileRoute("/driver")({
@@ -165,11 +165,13 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
         <p className="text-xs text-muted-foreground">طلب {t.id} · {t.kind === "pickup" ? "استلام" : "تسليم"}</p>
         <p className="font-display text-xl">{t.customer}</p>
         <p className="mt-1 flex items-center gap-1 text-sm"><MapPin className="size-4 text-accent" />{t.area}</p>
-        <div className="mt-3 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-4 gap-2">
           <a href={`tel:${t.phone}`} className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs"><Phone className="size-4" />اتصال</a>
           <a href={`sms:${t.phone}`} className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs"><MessageCircle className="size-4" />رسالة</a>
           <a href={`https://maps.google.com/?q=${encodeURIComponent(t.area)}`} target="_blank" rel="noreferrer" className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs"><Navigation className="size-4" />الخريطة</a>
+          <BarcodeButton />
         </div>
+        {/* scanned result shown inside BarcodeButton */}
       </div>
 
       <div className="rounded-2xl bg-card p-4 shadow-soft">
@@ -278,5 +280,30 @@ function Profile() {
         <div key={l} className="rounded-2xl bg-card p-4 shadow-soft">{l}</div>
       ))}
     </div>
+  );
+}
+
+type Detector = { detect: (src: ImageBitmap) => Promise<{ rawValue: string }[]> };
+
+function BarcodeButton() {
+  const ref = useRef<HTMLInputElement>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const onFile = async (f?: File) => {
+    if (!f) return;
+    const BD = (window as unknown as { BarcodeDetector?: new () => Detector }).BarcodeDetector;
+    if (!BD) return setCode("تم حفظ صورة الباركود");
+    try {
+      const r = await new BD().detect(await createImageBitmap(f));
+      setCode(r[0]?.rawValue ?? "لم يُقرأ الباركود، حاول مرة ثانية");
+    } catch { setCode("لم يُقرأ الباركود، حاول مرة ثانية"); }
+  };
+  return (
+    <>
+      <button onClick={() => ref.current?.click()} className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs">
+        <ScanLine className="size-4" />الباركود
+      </button>
+      <input ref={ref} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void onFile(e.target.files?.[0])} />
+      {code ? <p className="col-span-4 rounded-xl bg-accent/20 p-2 text-center text-sm">الباركود: <b>{code}</b></p> : null}
+    </>
   );
 }
