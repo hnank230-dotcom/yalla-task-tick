@@ -190,9 +190,9 @@ function HomeScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string
     <div className="px-5 pt-8">
       <div className="flex items-start justify-between">
         <Logo />
-        <button className="grid h-11 w-11 place-items-center rounded-full border border-border bg-card" aria-label="الإشعارات" onClick={() => live && go("track")}>
+        <button className="relative grid h-11 w-11 place-items-center rounded-full border border-border bg-card" aria-label="الإشعارات" onClick={() => live && go("track")}>
           <Bell className="h-5 w-5" />
-          {live && !live.received ? <span className="absolute -mt-6 -mr-6 h-3 w-3 rounded-full bg-accent" /> : null}
+          {live && !live.received ? <span className="absolute right-1 top-1 h-3 w-3 rounded-full bg-accent" /> : null}
         </button>
       </div>
       <p className="mt-4 text-sm text-muted-foreground">مرحباً بك</p>
