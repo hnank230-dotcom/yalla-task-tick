@@ -68,17 +68,12 @@ describe("Order received page", () => {
   });
 });
 
-describe("My Orders — track option", () => {
-  it("offers a track-order button above the previous invoices", () => {
+describe("My Orders — starts empty", () => {
+  it("shows no fake orders or invoices before the customer orders", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: "طلباتي" }));
-
-    const track = screen.getByRole("button", { name: /تتبع الطلب/ });
-    const invoices = screen.getByText("فواتيري السابقة");
-    // track must come before the invoices heading in the page
-    expect(track.compareDocumentPosition(invoices) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-
-    fireEvent.click(track);
-    expect(screen.getByText("الحالة الآن")).toBeInTheDocument();
+    expect(screen.getByText("لا توجد طلبات بعد")).toBeInTheDocument();
+    expect(screen.queryByText("فواتيري السابقة")).not.toBeInTheDocument();
+    expect(screen.queryByText(/1042/)).not.toBeInTheDocument();
   });
 });

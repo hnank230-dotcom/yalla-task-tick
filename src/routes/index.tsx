@@ -86,7 +86,7 @@ function App() {
         {screen === "track" && <TrackScreen go={go} orderId={orderId} />}
         {screen === "map" && <MapScreen go={go} />}
         {screen === "offers" && <OffersScreen />}
-        {screen === "orders" && <OrdersScreen go={go} openInvoice={() => setInvoice(true)} />}
+        {screen === "orders" && <OrdersScreen go={go} orderId={orderId} />}
         {screen === "account" && <AccountScreen go={go} openInvoice={() => setInvoice(true)} />}
         {screen === "delivery" && <DeliveryScreen go={go} />}
       </div>
@@ -515,7 +515,7 @@ function TrackScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: strin
         <div className="rounded-3xl bg-primary p-6 text-primary-foreground">
           <div className="flex justify-between text-sm">
             <span className="text-accent">الحالة الآن</span>
-            <span className="text-left"><b>أحمد</b><br /><span className="text-xs opacity-70">اشتراك رقم 5521</span></span>
+            <span className="text-left"><b>عميل ناصع</b></span>
           </div>
           <p className="mt-2 font-display text-4xl font-bold">في الطريق إليك</p>
           <p className="mt-1 text-sm opacity-80">الوصول المتوقع بعد ٢٠ دقيقة</p>
@@ -622,28 +622,27 @@ function InvoiceModal({ close }: { close: () => void }) {
 }
 
 /* ---------- tabs ---------- */
-function OrdersScreen({ go, openInvoice }: { go: (s: Screen) => void; openInvoice: () => void }) {
+function OrdersScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string | null; openInvoice?: () => void }) {
+  const live = useOrder(orderId ?? null);
   return (
     <div className="px-5 pt-8">
       <h1 className="font-display text-3xl font-bold">طلباتي</h1>
-      <button onClick={() => go("track")} className="mt-5 w-full rounded-2xl bg-primary p-5 text-right text-primary-foreground">
-        <div className="flex justify-between"><b>طلب 1042</b><span className="text-accent">في الطريق إليك</span></div>
-        <p className="mt-1 text-sm opacity-75">٦ قطع · ٢٤ ر.س</p>
-      </button>
-      <button onClick={() => go("track")} className="mt-5 flex w-full items-center gap-3 rounded-2xl border-2 border-accent bg-card p-4 text-right">
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-primary"><Truck className="h-5 w-5 text-accent" /></span>
-        <span className="flex-1">
-          <span className="block font-bold">تتبع الطلب</span>
-          <span className="block text-xs text-muted-foreground">طلب 1042 · في الطريق إليك</span>
-        </span>
-        <ChevronLeft className="h-5 w-5" />
-      </button>
-      <h2 className="mb-3 mt-6 font-bold">فواتيري السابقة</h2>
-      {["1031", "1018", "1002"].map((n) => (
-        <button key={n} onClick={openInvoice} className="mb-3 flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-right">
-          <Receipt className="h-5 w-5 text-accent" /><span className="flex-1">فاتورة {n}</span><span className="font-bold">٢٤ ر.س</span>
+      {live ? (
+        <button onClick={() => go("track")} className="mt-5 flex w-full items-center gap-3 rounded-2xl border-2 border-accent bg-card p-4 text-right">
+          <span className="grid h-11 w-11 place-items-center rounded-full bg-primary"><Truck className="h-5 w-5 text-accent" /></span>
+          <span className="flex-1">
+            <span className="block font-bold">تتبع الطلب</span>
+            <span className="block text-xs text-muted-foreground">طلب {live.id} · {PICKUP_STEPS[live.step]} · {live.total} ر.س</span>
+          </span>
+          <ChevronLeft className="h-5 w-5" />
         </button>
-      ))}
+      ) : (
+        <div className="mt-16 flex flex-col items-center gap-3 text-center">
+          <span className="grid h-16 w-16 place-items-center rounded-full bg-secondary"><Receipt className="h-8 w-8 text-muted-foreground" /></span>
+          <p className="font-display text-lg">لا توجد طلبات بعد</p>
+          <GoldBtn onClick={() => go("order")}>اطلب استلام الآن</GoldBtn>
+        </div>
+      )}
     </div>
   );
 }
@@ -671,26 +670,22 @@ function OffersScreen() {
   );
 }
 
-function AccountScreen({ go, openInvoice }: { go: (s: Screen) => void; openInvoice: () => void }) {
+function AccountScreen({ go }: { go: (s: Screen) => void; openInvoice?: () => void }) {
   return (
     <div className="px-5 pt-8">
       <h1 className="font-display text-3xl font-bold">حسابي</h1>
       <div className="mt-5 flex items-center gap-4 rounded-3xl bg-primary p-5 text-primary-foreground">
         <span className="grid h-14 w-14 place-items-center rounded-full bg-accent text-accent-foreground"><User className="h-6 w-6" /></span>
-        <div className="flex-1"><p className="text-lg font-bold">أحمد</p><p className="text-xs opacity-75">اشتراك رقم 5521</p></div>
-        <span className="flex flex-col items-center text-xs"><QrCode className="h-10 w-10 text-accent" />اعرض للمندوب</span>
+        <div className="flex-1"><p className="text-lg font-bold">عميل ناصع</p><p className="text-xs opacity-75">لا يوجد اشتراك</p></div>
       </div>
       <h2 className="mb-2 mt-6 font-bold">معلومات التواصل</h2>
       <div className="divide-y divide-border rounded-2xl border border-border bg-card">
-        {["0500000000", "ahmad@example.com", "حي النرجس، الرياض"].map((v) => <p key={v} className="p-4" dir="auto">{v}</p>)}
+        {["رقم الجوال", "البريد الإلكتروني", "العنوان"].map((v) => (
+          <input key={v} placeholder={v} dir="auto" className="w-full bg-transparent p-4 outline-none" />
+        ))}
       </div>
-      <h2 className="mb-2 mt-6 font-bold">ملاحظات العميل</h2>
-      <textarea placeholder="مثال: الثوب الأبيض بدون نشا" className="h-24 w-full rounded-2xl border border-border bg-card p-4 outline-none focus:ring-2 focus:ring-ring" />
       <button onClick={() => go("delivery")} className="mt-4 flex w-full items-center justify-between rounded-2xl border border-border bg-card p-4">
         <span className="font-bold">خيارات التسليم</span><ChevronLeft className="h-5 w-5" />
-      </button>
-      <button onClick={openInvoice} className="mt-3 flex w-full items-center justify-between rounded-2xl border border-border bg-card p-4">
-        <span className="font-bold">فواتيري السابقة</span><ChevronLeft className="h-5 w-5" />
       </button>
     </div>
   );
