@@ -25,6 +25,7 @@ export type Database = {
           notes: string
           paid: boolean
           phone: string
+          photos: string[]
           pieces: number
           step: number
           time: string
@@ -40,6 +41,7 @@ export type Database = {
           notes?: string
           paid?: boolean
           phone?: string
+          photos?: string[]
           pieces?: number
           step?: number
           time?: string
@@ -55,6 +57,7 @@ export type Database = {
           notes?: string
           paid?: boolean
           phone?: string
+          photos?: string[]
           pieces?: number
           step?: number
           time?: string
