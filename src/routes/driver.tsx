@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useRef } from "react";
 import { useOrders, advanceOrder, splitHandover } from "@/lib/orders";
+import logo from "@/assets/naseg-logo.png";
 import {
   MapPin, Phone, MessageCircle, Package, Truck, CheckCircle2, ChevronLeft,
   History, BookOpen, StickyNote, User, ListChecks, Navigation, Clock, Power, Inbox, ScanLine,
@@ -53,7 +54,7 @@ function DriverApp() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm opacity-80">مرحبًا، خالد</p>
-            <h1 className="font-display text-2xl">ناصع <span className="text-accent">للمندوب</span></h1>
+            <h1 className="flex items-center gap-2 font-display text-2xl"><img src={logo} alt="ناصع" className="h-12 w-12 rounded-xl bg-card object-contain p-1" /><span className="text-accent">للمندوب</span></h1>
             <p className="mt-1 text-xs opacity-60">لوحة الاستلام والتسليم</p>
           </div>
           <button
@@ -158,6 +159,9 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
   const steps = STEPS[t.kind];
   const done = t.step === 3;
   const next = ["ابدأ التوجه للعميل", "وصلت للموقع", t.kind === "pickup" ? "تأكيد استلام القطع" : "تأكيد تسليم الطلب"][t.step];
+  // Barcode photo is mandatory before confirming pickup or delivery (step 2 -> 3).
+  const [scanned, setScanned] = useState<string | null>(null);
+  const needScan = t.step === 2 && scanned !== `${t.id}-${t.kind}`;
   return (
     <div className="space-y-4">
       <button onClick={back} className="text-sm text-muted-foreground">→ رجوع</button>
@@ -169,7 +173,7 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
           <a href={`tel:${t.phone}`} className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs"><Phone className="size-4" />اتصال</a>
           <a href={`sms:${t.phone}`} className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs"><MessageCircle className="size-4" />رسالة</a>
           <a href={`https://maps.google.com/?q=${encodeURIComponent(t.area)}`} target="_blank" rel="noreferrer" className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs"><Navigation className="size-4" />الخريطة</a>
-          <BarcodeButton />
+          <BarcodeButton key={`${t.id}-${t.kind}-${t.step}`} onScanned={() => setScanned(`${t.id}-${t.kind}`)} />
         </div>
         {/* scanned result shown inside BarcodeButton */}
       </div>
@@ -206,7 +210,14 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
           <p className="font-display text-lg">{t.kind === "pickup" ? "تم استلام الطلب" : "تم تسليم الطلب"}</p>
         </div>
       ) : (
-        <button onClick={advance} className="w-full rounded-2xl bg-primary py-4 font-display text-lg text-primary-foreground">{next}</button>
+        <>
+          {needScan ? (
+            <p className="rounded-xl border border-accent bg-accent/15 p-3 text-center text-sm font-bold">
+              صوّر باركود الكيس أولًا (زر الباركود بالأعلى) قبل {t.kind === "pickup" ? "تأكيد الاستلام" : "تأكيد التسليم"}
+            </p>
+          ) : null}
+          <button disabled={needScan} onClick={advance} className="w-full rounded-2xl bg-primary py-4 font-display text-lg text-primary-foreground disabled:opacity-40">{next}</button>
+        </>
       )}
     </div>
   );
@@ -287,9 +298,10 @@ function Profile() {
 
 type Detector = { detect: (src: ImageBitmap) => Promise<{ rawValue: string }[]> };
 
-function BarcodeButton() {
+function BarcodeButton({ onScanned }: { onScanned?: () => void }) {
   const ref = useRef<HTMLInputElement>(null);
-  const [code, setCode] = useState<string | null>(null);
+  const [code, setCodeRaw] = useState<string | null>(null);
+  const setCode = (c: string) => { setCodeRaw(c); if (!c.startsWith("لم يُقرأ")) onScanned?.(); };
   const onFile = async (f?: File) => {
     if (!f) return;
     const BD = (window as unknown as { BarcodeDetector?: new () => Detector }).BarcodeDetector;
