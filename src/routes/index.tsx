@@ -671,7 +671,7 @@ function InvoiceModal({ o, close }: { o: Order; close: () => void }) {
 }
 
 /* ---------- tabs ---------- */
-function OrdersScreen({ go, orderId, myIds = [] }: { go: (s: Screen) => void; orderId?: string | null; myIds?: string[]; openInvoice?: (o: Order) => void }) {
+function OrdersScreen({ go, orderId, myIds = [], openInvoice }: { go: (s: Screen) => void; orderId?: string | null; myIds?: string[]; openInvoice?: (o: Order) => void }) {
   const live = useOrder(orderId ?? null);
   const mine = useMyOrders(myIds);
   const past = mine.filter((o) => o.id !== live?.id || (o.kind === "drop" && o.step === 3));
