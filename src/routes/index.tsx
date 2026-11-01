@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
-import { createOrder, useOrder, useMyOrders, confirmReceived, PICKUP_STEPS, DROP_STEPS, stepLabel, uploadPhotos } from "@/lib/orders";
+import { createOrder, useOrder, useMyOrders, confirmReceived, PICKUP_STEPS, DROP_STEPS, stepLabel, uploadPhotos, splitHandover, type Order } from "@/lib/orders";
+import logoImg from "@/assets/naseg-logo.png";
 import {
   Bell, Shirt, Flame, Droplet, Grid3x3, Home, ShoppingBag, Star, User, ChevronRight, ChevronLeft,
   Plus, Minus, X, Search, Banknote, CreditCard, Check, Lock, Phone, MessageSquare, MapPin, Users,
@@ -58,7 +59,7 @@ function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [qty, setQty] = useState<Record<string, number>>({ ثوب: 2, شماغ: 1 });
   const [extras, setExtras] = useState<string[]>([]);
-  const [invoice, setInvoice] = useState(false);
+  const [invoice, setInvoice] = useState<Order | null>(null);
   const [time, setTime] = useState("اليوم مساءً");
   const [payMethod, setPayMethod] = useState("كاش عند الاستلام");
   const [notes, setNotes] = useState("");
@@ -87,7 +88,7 @@ function App() {
     const pieces = ALL.reduce((s, i) => s + (qty[i.name] || 0), 0);
     const total = ALL.reduce((s, i) => s + (qty[i.name] || 0) * i.price, 0);
     uploadPhotos(photos)
-      .then((paths) => createOrder({ time, pieces, total, paid: m !== "كاش عند الاستلام", handover, privacy, notes: notes.trim(), photos: paths }))
+      .then((paths) => createOrder({ time, pieces, total, paid: m !== "كاش عند الاستلام", handover, privacy, notes: notes.trim(), photos: paths, pay_method: m }))
       .then((id) => { setOrderId(id); setPhotos([]); setNotes(""); })
       .catch(() => setOrderId(null));
   };
@@ -107,12 +108,12 @@ function App() {
         {screen === "track" && <TrackScreen go={go} orderId={orderId} />}
         {screen === "map" && <MapScreen go={go} />}
         {screen === "offers" && <OffersScreen />}
-        {screen === "orders" && <OrdersScreen go={go} orderId={orderId} myIds={myIds} />}
-        {screen === "account" && <AccountScreen go={go} openInvoice={() => setInvoice(true)} />}
+        {screen === "orders" && <OrdersScreen go={go} orderId={orderId} myIds={myIds} openInvoice={setInvoice} />}
+        {screen === "account" && <AccountScreen go={go} />}
         {screen === "delivery" && <DeliveryScreen go={go} />}
       </div>
       {tab && <BottomNav screen={screen} go={go} />}
-      {invoice && <InvoiceModal close={() => setInvoice(false)} />}
+      {invoice && <InvoiceModal o={invoice} close={() => setInvoice(null)} />}
     </div>
   );
 }
@@ -159,15 +160,7 @@ function Stepper({ n, set }: { n: number; set: (n: number) => void }) {
   );
 }
 function Logo() {
-  return (
-    <div className="flex flex-col items-center text-accent">
-      <svg viewBox="0 0 120 50" className="h-12 w-28" fill="none" stroke="currentColor" strokeWidth="2.5">
-        <path d="M60 18 V12 a6 6 0 1 1 6 -6" />
-        <path d="M60 18 L8 44 H112 Z" strokeLinejoin="round" />
-      </svg>
-      <span className="-mt-6 font-display text-xl font-bold text-primary">ناصع</span>
-    </div>
-  );
+  return <img src={logoImg} alt="ناصع" className="h-16 w-16 object-contain" />;
 }
 function Toggle({ on, set }: { on: boolean; set: (b: boolean) => void }) {
   return (
@@ -221,7 +214,11 @@ function HomeScreen({ go, orderId }: { go: (s: Screen) => void; orderId?: string
       {live && live.kind === "drop" && live.step === 3 && !live.received ? (
         <div className="mt-4 rounded-2xl border-2 border-success bg-card p-5 text-right">
           <p className="flex items-center gap-2 font-display text-xl font-bold"><Check className="h-6 w-6 text-success" /> طلبك على بابك</p>
-          <p className="mt-1 text-sm text-muted-foreground">طلب {live.id} · {live.handover.split("تسليم:")[1]?.trim() || live.handover}</p>
+          <p className="mt-1 text-sm text-muted-foreground">طلب {live.id} · {live.pieces} قطع</p>
+          <p className="mt-3 rounded-xl bg-secondary p-3 text-sm">
+            <b>مكان طلبك الآن: </b>{(() => { const d = splitHandover(live.handover).drop; return d === "تعليقة الباب" ? "معلّق على تعليقة بابك" : d === "يد بيد" ? "سلّمه المندوب لك يدًا بيد" : d === "الاستلام من المغسلة" ? "جاهز للاستلام من المغسلة" : `في الموقع المحدد: ${d}`; })()}
+            {live.privacy ? " · داخل كيس الخصوصية" : ""}
+          </p>
           <GoldBtn onClick={() => void confirmReceived(live.id)} className="mt-4">استلام</GoldBtn>
         </div>
       ) : null}
@@ -651,35 +648,30 @@ function MapScreen({ go }: { go: (s: Screen) => void }) {
 }
 
 /* ---------- invoice ---------- */
-function InvoiceModal({ close }: { close: () => void }) {
-  const lines = [["ثوب × ٢", "٨"], ["شماغ × ١", "٤"], ["ملابس رياضية × ٣", "١٢"]];
+function InvoiceModal({ o, close }: { o: Order; close: () => void }) {
+  const date = o.created_at ? new Date(o.created_at).toLocaleDateString("ar-SA", { year: "numeric", month: "long", day: "numeric" }) : "";
+  const hv = splitHandover(o.handover);
   return (
     <div dir="rtl" className="fixed inset-0 z-50 mx-auto flex max-w-md items-center bg-primary/60 p-5" onClick={close}>
       <div className="w-full rounded-3xl bg-card p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
-          <div><h2 className="font-display text-3xl font-bold">الفاتورة</h2><p className="text-xs text-muted-foreground">رقم 1042 · 29 أكتوبر 2026</p></div>
+          <div><h2 className="font-display text-3xl font-bold">الفاتورة</h2><p className="text-xs text-muted-foreground">طلب {o.id}{date ? ` · ${date}` : ""}</p></div>
           <button onClick={close} className="grid h-11 w-11 place-items-center rounded-full border border-border" aria-label="إغلاق"><X className="h-5 w-5" /></button>
         </div>
-        <div className="mt-3 flex justify-between text-sm"><span>أحمد · اشتراك 5521</span><span className="rounded-full bg-secondary px-3 py-1 font-bold">مدفوعة</span></div>
+        <div className="mt-3 flex justify-between text-sm"><span>{o.customer}</span><span className="rounded-full bg-secondary px-3 py-1 font-bold">{o.paid ? "مدفوعة" : "غير مدفوعة"}</span></div>
         <div className="my-4 border-t-2 border-dashed border-accent/50" />
-        {lines.map(([a, b]) => <div key={a} className="flex justify-between py-1.5"><span>{a}</span><span>{b} ر.س</span></div>)}
+        {[["عدد القطع", `${o.pieces}`], ["موعد الاستلام", o.time], ["الاستلام", hv.pick], ["التسليم", hv.drop], ["كيس الخصوصية", o.privacy ? "مفعّل" : "غير مفعّل"], ["الحالة", o.received ? "تم الاستلام منك" : stepLabel(o)]].map(([a, b]) => <div key={a} className="flex justify-between py-1.5 text-sm"><span className="text-muted-foreground">{a}</span><span>{b}</span></div>)}
         <div className="my-4 border-t-2 border-dashed border-accent/50" />
-        <div className="flex justify-between"><span>الإجمالي شامل الضريبة</span><span className="text-2xl font-bold">٢٤ ر.س</span></div>
-        <div className="mt-2 flex justify-between text-sm text-muted-foreground"><span>طريقة الدفع</span><span>كاش</span></div>
-        <div className="mx-auto mt-4 flex h-12 w-3/4 gap-[3px]">
-          {Array.from({ length: 34 }).map((_, i) => <span key={i} className="flex-1 bg-primary" style={{ opacity: (i * 7) % 3 ? 1 : 0 }} />)}
-        </div>
-        <div className="mt-5 grid grid-cols-2 gap-3">
-          <button className="rounded-full border-2 border-accent py-3 font-bold">إبلاغ عن ملاحظة</button>
-          <GoldBtn onClick={() => window.print()}>تحميل PDF</GoldBtn>
-        </div>
+        <div className="flex justify-between"><span>الإجمالي شامل الضريبة</span><span className="text-2xl font-bold">{o.total} ر.س</span></div>
+        <div className="mt-2 flex justify-between text-sm text-muted-foreground"><span>طريقة الدفع</span><span>{o.pay_method || (o.paid ? "مدفوع إلكترونيًا" : "كاش عند الاستلام")}</span></div>
+        <GoldBtn onClick={() => window.print()} className="mt-5 w-full">تحميل PDF</GoldBtn>
       </div>
     </div>
   );
 }
 
 /* ---------- tabs ---------- */
-function OrdersScreen({ go, orderId, myIds = [] }: { go: (s: Screen) => void; orderId?: string | null; myIds?: string[]; openInvoice?: () => void }) {
+function OrdersScreen({ go, orderId, myIds = [] }: { go: (s: Screen) => void; orderId?: string | null; myIds?: string[]; openInvoice?: (o: Order) => void }) {
   const live = useOrder(orderId ?? null);
   const mine = useMyOrders(myIds);
   const past = mine.filter((o) => o.id !== live?.id || (o.kind === "drop" && o.step === 3));
@@ -699,13 +691,13 @@ function OrdersScreen({ go, orderId, myIds = [] }: { go: (s: Screen) => void; or
       ) : null}
       {past.length ? (
         <>
-          <h2 className="mt-7 font-bold">الطلبات السابقة</h2>
+          <h2 className="mt-7 font-bold">الطلبات والفواتير السابقة</h2>
           <div className="mt-3 space-y-3">
             {past.map((o) => (
-              <div key={o.id} className="rounded-2xl border border-border bg-card p-4">
-                <div className="flex justify-between font-bold"><span>طلب {o.id}</span><span>{o.total} ر.س</span></div>
-                <p className="mt-1 text-xs text-muted-foreground">{o.pieces} قطع · {o.time} · {o.received ? "تم الاستلام منك" : o.kind === "drop" && o.step === 3 ? "تم التسليم" : stepLabel(o)}</p>
-              </div>
+              <button key={o.id} onClick={() => openInvoice?.(o)} className="block w-full rounded-2xl border border-border bg-card p-4 text-right">
+                <div className="flex justify-between font-bold"><span className="flex items-center gap-1"><Receipt className="h-4 w-4 text-accent" />فاتورة طلب {o.id}</span><span>{o.total} ر.س</span></div>
+                <p className="mt-1 text-xs text-muted-foreground">{o.pieces} قطع · {o.time} · {o.received ? "تم الاستلام منك" : o.kind === "drop" && o.step === 3 ? "تم التسليم" : stepLabel(o)}{o.created_at ? ` · ${new Date(o.created_at).toLocaleDateString("ar-SA")}` : ""}</p>
+              </button>
             ))}
           </div>
         </>
@@ -758,6 +750,9 @@ function AccountScreen({ go }: { go: (s: Screen) => void; openInvoice?: () => vo
           <input key={v} placeholder={v} dir="auto" className="w-full bg-transparent p-4 outline-none" />
         ))}
       </div>
+      <button onClick={() => go("orders")} className="mt-4 flex w-full items-center justify-between rounded-2xl border border-border bg-card p-4">
+        <span className="flex items-center gap-2 font-bold"><Receipt className="h-5 w-5 text-accent" />فواتيري السابقة</span><ChevronLeft className="h-5 w-5" />
+      </button>
       <button onClick={() => go("delivery")} className="mt-4 flex w-full items-center justify-between rounded-2xl border border-border bg-card p-4">
         <span className="font-bold">خيارات التسليم</span><ChevronLeft className="h-5 w-5" />
       </button>
