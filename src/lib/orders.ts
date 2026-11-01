@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 export type Order = {
   id: string; kind: "pickup" | "drop"; customer: string; phone: string; area: string;
   time: string; pieces: number; handover: string; total: number; paid: boolean; step: number;
-  notes?: string; photos?: string[]; privacy?: boolean; received?: boolean;
+  notes?: string; photos?: string[]; privacy?: boolean; received?: boolean; pay_method?: string; created_at?: string;
 };
 
 // handover is stored as "استلام: X · تسليم: Y"
@@ -44,7 +44,7 @@ export async function sendToDelivery(id: string) {
 
 const toOrder = (r: Record<string, unknown>): Order => ({ ...(r as Order), total: Number(r["total"]) });
 
-export async function createOrder(o: Pick<Order, "time" | "pieces" | "total" | "paid" | "handover"> & { notes?: string; photos?: string[]; privacy?: boolean }): Promise<string> {
+export async function createOrder(o: Pick<Order, "time" | "pieces" | "total" | "paid" | "handover"> & { notes?: string; photos?: string[]; privacy?: boolean; pay_method?: string }): Promise<string> {
   const id = `N-${Math.floor(1000 + Math.random() * 9000)}`;
   const { error } = await supabase.from("orders").insert({ id, kind: "pickup", step: 0, ...o });
   if (error) throw error;
