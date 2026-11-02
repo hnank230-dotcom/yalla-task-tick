@@ -29,6 +29,7 @@ export type Database = {
           photos: string[]
           pieces: number
           privacy: boolean
+          proof_photo: string | null
           received: boolean
           step: number
           time: string
@@ -48,6 +49,7 @@ export type Database = {
           photos?: string[]
           pieces?: number
           privacy?: boolean
+          proof_photo?: string | null
           received?: boolean
           step?: number
           time?: string
@@ -67,6 +69,7 @@ export type Database = {
           photos?: string[]
           pieces?: number
           privacy?: boolean
+          proof_photo?: string | null
           received?: boolean
           step?: number
           time?: string
