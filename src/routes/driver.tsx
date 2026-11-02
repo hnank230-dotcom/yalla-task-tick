@@ -29,8 +29,8 @@ type Task = {
 };
 
 const STEPS: Record<Kind, string[]> = {
-  pickup: ["جديد", "في الطريق", "وصلت", "تم الاستلام"],
-  drop: ["جاهز", "في الطريق", "وصلت", "تم التسليم"],
+  pickup: ["جديد", "في الطريق", "في الطريق", "تم الاستلام"],
+  drop: ["جاهز", "في الطريق", "في الطريق", "تم التسليم"],
 };
 
 function DriverApp() {
@@ -156,12 +156,12 @@ function TaskList({ tasks, online, onOpen }: { tasks: Task[]; online: boolean; o
 }
 
 function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: () => void }) {
-  const steps = STEPS[t.kind];
+  const steps = ["في الطريق", "تصوير الباركود", t.kind === "pickup" ? "تم الاستلام" : "تم التسليم"];
   const done = t.step === 3;
-  const next = ["ابدأ التوجه للعميل", "وصلت للموقع", t.kind === "pickup" ? "تأكيد استلام القطع" : "تأكيد تسليم الطلب"][t.step];
+  const next = t.step === 0 ? "في الطريق" : t.kind === "pickup" ? "تأكيد استلام القطع" : "تأكيد تسليم الطلب";
   // Barcode photo is mandatory before confirming pickup or delivery (step 2 -> 3).
   const [scanned, setScanned] = useState<string | null>(null);
-  const needScan = t.step === 2 && scanned !== `${t.id}-${t.kind}`;
+  const needScan = t.step >= 1 && scanned !== `${t.id}-${t.kind}`;
   return (
     <div className="space-y-4">
       <button onClick={back} className="text-sm text-muted-foreground">→ رجوع</button>
@@ -169,11 +169,10 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
         <p className="text-xs text-muted-foreground">طلب {t.id} · {t.kind === "pickup" ? "استلام" : "تسليم"}</p>
         <p className="font-display text-xl">{t.customer}</p>
         <p className="mt-1 flex items-center gap-1 text-sm"><MapPin className="size-4 text-accent" />{t.area}</p>
-        <div className="mt-3 grid grid-cols-4 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2">
           <a href={`tel:${t.phone}`} className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs"><Phone className="size-4" />اتصال</a>
           <a href={`sms:${t.phone}`} className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs"><MessageCircle className="size-4" />رسالة</a>
           <a href={`https://maps.google.com/?q=${encodeURIComponent(t.area)}`} target="_blank" rel="noreferrer" className="flex flex-col items-center rounded-xl bg-secondary py-2 text-xs"><Navigation className="size-4" />الخريطة</a>
-          <BarcodeButton key={`${t.id}-${t.kind}-${t.step}`} onScanned={() => setScanned(`${t.id}-${t.kind}`)} />
         </div>
         {/* scanned result shown inside BarcodeButton */}
       </div>
@@ -198,7 +197,7 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
       <ol className="flex justify-between rounded-2xl bg-card p-4 shadow-soft">
         {steps.map((s, i) => (
           <li key={s} className="flex flex-1 flex-col items-center gap-1 text-center text-xs">
-            <span className={`flex size-7 items-center justify-center rounded-full ${i <= t.step ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
+            <span className={`flex size-7 items-center justify-center rounded-full ${i <= (done ? 2 : t.step === 0 ? -1 : needScan ? 0 : 1) ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"}`}>{i + 1}</span>
             {s}
           </li>
         ))}
@@ -211,10 +210,11 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
         </div>
       ) : (
         <>
-          {needScan ? (
-            <p className="rounded-xl border border-accent bg-accent/15 p-3 text-center text-sm font-bold">
-              صوّر باركود الكيس أولًا (زر الباركود بالأعلى) قبل {t.kind === "pickup" ? "تأكيد الاستلام" : "تأكيد التسليم"}
-            </p>
+          {t.step >= 1 ? (
+            <div className="space-y-2 rounded-2xl border border-accent bg-card p-4 shadow-soft">
+              <p className="text-center text-sm font-bold">صوّر باركود الكيس قبل {t.kind === "pickup" ? "تأكيد الاستلام" : "تأكيد التسليم"}</p>
+              <BarcodeButton key={`${t.id}-${t.kind}`} onScanned={() => setScanned(`${t.id}-${t.kind}`)} />
+            </div>
           ) : null}
           <button disabled={needScan} onClick={advance} className="w-full rounded-2xl bg-primary py-4 font-display text-lg text-primary-foreground disabled:opacity-40">{next}</button>
         </>
