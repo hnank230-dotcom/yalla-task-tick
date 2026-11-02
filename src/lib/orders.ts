@@ -18,6 +18,11 @@ export async function confirmReceived(id: string) {
   await supabase.from("orders").update({ received: true }).eq("id", id);
 }
 
+// Laundry confirms the bag arrived (pickup orders reuse `received`).
+export async function laundryReceive(id: string) {
+  await supabase.from("orders").update({ received: true }).eq("id", id);
+}
+
 export const PICKUP_STEPS = ["جديد", "في الطريق", "وصلت", "تم الاستلام"];
 export const DROP_STEPS = ["جاهز", "في الطريق", "وصلت", "تم التسليم"];
 export const stepLabel = (o: Pick<Order, "kind" | "step">) => (o.kind === "drop" ? DROP_STEPS : PICKUP_STEPS)[o.step];
@@ -39,7 +44,7 @@ export async function photoUrls(paths: string[]): Promise<string[]> {
 }
 // Laundry finished cleaning: the order becomes a delivery task for the driver.
 export async function sendToDelivery(id: string) {
-  await supabase.from("orders").update({ kind: "drop", step: 0 }).eq("id", id);
+  await supabase.from("orders").update({ kind: "drop", step: 0, received: false }).eq("id", id);
 }
 
 const toOrder = (r: Record<string, unknown>): Order => ({ ...(r as Order), total: Number(r["total"]) });
@@ -52,8 +57,9 @@ export async function createOrder(o: Pick<Order, "time" | "pieces" | "total" | "
 }
 
 export async function advanceOrder(o: Order) {
-  const step = Math.min(o.step + 1, 3);
-  await supabase.from("orders").update({ step, paid: o.step === 2 ? true : o.paid }).eq("id", o.id);
+  // Driver flow: 0 -> 1 (في الطريق, then barcode) -> 3 (تم الاستلام/التسليم).
+  const step = o.step === 0 ? 1 : 3;
+  await supabase.from("orders").update({ step, paid: step === 3 ? true : o.paid }).eq("id", o.id);
 }
 
 function useLive(load: () => Promise<void>, key: string) {
