@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useOrders, photoUrls, sendToDelivery, type Order } from "@/lib/orders";
+import { useOrders, photoUrls, sendToDelivery, laundryReceive, type Order } from "@/lib/orders";
 import logo from "@/assets/naseg-logo.png";
 import { Inbox, StickyNote, Image as ImageIcon, X, Truck, Shirt } from "lucide-react";
 
@@ -21,12 +21,16 @@ export const Route = createFileRoute("/laundry")({
 function LaundryApp() {
   const all = useOrders();
   // Every new customer order shows here immediately; past = already sent out for delivery.
-  const current = all.filter((o) => o.kind === "pickup");
-  const past = all.filter((o) => o.kind === "drop");
-  const inHouse = current.filter((o) => o.step === 3).length;
-  const [tab, setTab] = useState<"now" | "past">("now");
+  const incoming = all.filter((o) => o.kind === "pickup" && !(o.step === 3 && o.received));
+  const processing = all.filter((o) => o.kind === "pickup" && o.step === 3 && o.received);
+  const delivering = all.filter((o) => o.kind === "drop" && o.step < 3);
+  const past = all.filter((o) => o.kind === "drop" && o.step === 3);
+  const current = incoming;
+  const inHouse = processing.length;
+  type Tab = "in" | "proc" | "out" | "past";
+  const [tab, setTab] = useState<Tab>("in");
   const [gallery, setGallery] = useState<string[] | null>(null);
-  const list = tab === "now" ? current : past;
+  const list = { in: incoming, proc: processing, out: delivering, past }[tab];
 
   return (
     <div dir="rtl" className="mx-auto min-h-screen max-w-3xl bg-background pb-10 font-sans">
@@ -38,7 +42,7 @@ function LaundryApp() {
           <span className="font-display text-xl text-accent">· {current.length - inHouse}</span><span className="text-sm">بانتظار المندوب</span>
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
-          {([["now", `الطلبات الحالية (${current.length})`], ["past", `الطلبات السابقة (${past.length})`]] as const).map(([k, l]) => (
+          {([["in", `استلام إلى المغسلة (${incoming.length})`], ["proc", `تحت المعالجة (${processing.length})`], ["out", `تسليم (${delivering.length})`], ["past", `السابقة (${past.length})`]] as const).map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)} className={`rounded-xl py-2 text-sm font-bold ${tab === k ? "bg-accent text-accent-foreground" : "bg-primary-foreground/10"}`}>{l}</button>
           ))}
         </div>
@@ -48,7 +52,7 @@ function LaundryApp() {
         {list.length === 0 ? (
           <div className="mt-16 flex flex-col items-center gap-3 text-center">
             <span className="flex size-16 items-center justify-center rounded-full bg-secondary"><Inbox className="size-8 text-muted-foreground" /></span>
-            <p className="font-display text-lg">{tab === "now" ? "لا توجد طلبات حاليًا" : "لا توجد طلبات سابقة"}</p>
+            <p className="font-display text-lg">لا توجد طلبات في هذا القسم</p>
             <p className="text-sm text-muted-foreground">أي طلب جديد من العميل يظهر هنا فورًا.</p>
           </div>
         ) : list.map((o) => <OrderCard key={o.id} o={o} onPhotos={setGallery} />)}
@@ -70,7 +74,8 @@ function OrderCard({ o, onPhotos }: { o: Order; onPhotos: (u: string[]) => void 
   const [urls, setUrls] = useState<string[]>([]);
   const paths = o.photos ?? [];
   const isDrop = o.kind === "drop";
-  const atLaundry = o.kind === "pickup" && o.step === 3;
+  const arrived = o.kind === "pickup" && o.step === 3;
+  const atLaundry = arrived && !!o.received;
   useEffect(() => { void photoUrls(paths).then(setUrls); // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paths.join(",")]);
   return (
@@ -80,7 +85,7 @@ function OrderCard({ o, onPhotos }: { o: Order; onPhotos: (u: string[]) => void 
         <span className="flex items-center gap-1 text-sm text-muted-foreground"><Shirt className="size-4" />{o.pieces} قطع · {o.total} ر.س</span>
       </div>
       <p className={`mt-1 inline-block rounded-full px-3 py-1 text-xs font-bold ${atLaundry || isDrop ? "bg-success text-success-foreground" : "bg-accent text-accent-foreground"}`}>
-        {isDrop ? `أُرسل للتسليم · ${o.received ? "استلمه العميل" : o.step === 3 ? "تم التسليم" : "مع المندوب"}` : atLaundry ? "استلمه المندوب ✓ — في المغسلة" : `لم يستلمه المندوب بعد · ${["جديد", "المندوب في الطريق", "المندوب وصل للعميل"][o.step]}`}
+        {isDrop ? `أُرسل للتسليم · ${o.received ? "استلمه العميل" : o.step === 3 ? "تم التسليم" : "مع المندوب"}` : atLaundry ? "تحت المعالجة في المغسلة" : arrived ? "وصل مع المندوب — بانتظار استلام المغسلة" : `لم يستلمه المندوب بعد · ${["جديد", "المندوب في الطريق", "المندوب وصل للعميل"][o.step]}`}
       </p>
       <p className="mt-1 text-sm text-muted-foreground">{o.customer} · {o.handover}</p>
       <p className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-bold ${o.privacy ? "bg-success text-success-foreground" : "bg-secondary text-muted-foreground"}`}>كيس الخصوصية: {o.privacy ? "مفعّل" : "غير مفعّل"}</p>
@@ -93,9 +98,11 @@ function OrderCard({ o, onPhotos }: { o: Order; onPhotos: (u: string[]) => void 
           className="flex items-center justify-center gap-2 rounded-xl bg-secondary py-3 text-sm disabled:opacity-50">
           <ImageIcon className="size-4" />{urls.length ? `مشاهدة الصور (${urls.length})` : "لا توجد صور"}
         </button>
-        {isDrop ? null : (
-          <button disabled={!atLaundry} onClick={() => void sendToDelivery(o.id)} className="flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm text-primary-foreground disabled:opacity-40">
-            <Truck className="size-4" />جاهز — أرسل للتسليم
+        {isDrop ? null : !atLaundry ? (
+          <button disabled={!arrived} onClick={() => void laundryReceive(o.id)} className="rounded-xl bg-accent py-3 text-sm font-bold text-accent-foreground disabled:opacity-40">استلام إلى المغسلة</button>
+        ) : (
+          <button onClick={() => void sendToDelivery(o.id)} className="flex items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm text-primary-foreground disabled:opacity-40">
+            <Truck className="size-4" />تبليغ المندوب: الطلب جاهز
           </button>
         )}
       </div>
