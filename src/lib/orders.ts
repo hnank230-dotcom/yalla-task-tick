@@ -5,7 +5,18 @@ import { supabase } from "@/integrations/supabase/client";
 export type Order = {
   id: string; kind: "pickup" | "drop"; customer: string; phone: string; area: string;
   time: string; pieces: number; handover: string; total: number; paid: boolean; step: number;
-  notes?: string; photos?: string[]; privacy?: boolean; received?: boolean; pay_method?: string; created_at?: string;
+  notes?: string; photos?: string[]; privacy?: boolean; received?: boolean; pay_method?: string; created_at?: string; proof_photo?: string | null;
+};
+export async function setProofPhoto(id: string, file: File) {
+  const [p] = await uploadPhotos([file]);
+  if (p) await supabase.from("orders").update({ proof_photo: p }).eq("id", id);
+}
+export function useProofUrl(path?: string | null) {
+  const [u, setU] = useState<string | null>(null);
+  useEffect(() => { if (path) photoUrls([path]).then((r) => setU(r[0] ?? null)); else setU(null); }, [path]);
+  return u;
+}
+type _Unused = {
 };
 
 // handover is stored as "استلام: X · تسليم: Y"
