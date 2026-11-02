@@ -214,6 +214,14 @@ function TaskDetail({ t, back, advance }: { t: Task; back: () => void; advance: 
             <div className="space-y-2 rounded-2xl border border-accent bg-card p-4 shadow-soft">
               <p className="text-center text-sm font-bold">صوّر باركود الكيس قبل {t.kind === "pickup" ? "تأكيد الاستلام" : "تأكيد التسليم"}</p>
               <BarcodeButton key={`${t.id}-${t.kind}`} onScanned={() => setScanned(`${t.id}-${t.kind}`)} />
+              {t.kind === "drop" ? (
+                <label className="flex cursor-pointer flex-col items-center gap-1 rounded-xl border border-dashed border-border py-3 text-xs">
+                  <span className="font-bold">صورة الباب / طريقة التسليم (اختياري)</span>
+                  <span className="text-muted-foreground">{t.proof_photo ? "تم رفع الصورة ✓ — يشوفها العميل" : "اضغط للتصوير"}</span>
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) setProofPhoto(t.id, f); }} />
+                </label>
+              ) : null}
             </div>
           ) : null}
           <button disabled={needScan} onClick={advance} className="w-full rounded-2xl bg-primary py-4 font-display text-lg text-primary-foreground disabled:opacity-40">{next}</button>
